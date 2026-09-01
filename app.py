@@ -24,16 +24,19 @@ def index():
 @app.route('/nova_demanda', methods=['GET', 'POST'])
 def nova_demanda():
     if request.method == 'POST':
+        conn = sqlite3.connect('demandas.db')
+        cursor = conn.cursor()
+        id = cursor.execute('SELECT MAX(id) FROM demandas').fetchone()[0] + 1
         titulo = request.form['titulo']
         descricao = request.form['descricao']
         solicitante = request.form['solicitante']
-
+        priority = request.form['priority']
 
         conn = sqlite3.connect('demandas.db')
         cursor = conn.cursor()
 
         cursor.execute(
-            f"INSERT INTO demandas (titulo, descricao, solicitante, data_criacao) VALUES ('{titulo}', '{descricao}', '{solicitante}', '{datetime.now()}')")
+            f"INSERT INTO demandas (id, titulo, descricao, solicitante, data_criacao, priority) VALUES ({id}, '{titulo}', '{descricao}', '{solicitante}', '{datetime.now()}', '{priority}')")
         conn.commit()
         conn.close()
 
@@ -52,9 +55,10 @@ def editar(id):
         titulo = request.form['titulo']
         descricao = request.form['descricao']
         solicitante = request.form['solicitante']
+        priority = request.form['priority']
 
         cursor.execute(
-            f"UPDATE demandas SET titulo='{titulo}', descricao='{descricao}', solicitante='{solicitante}' WHERE id={id}")
+            f"UPDATE demandas SET titulo='{titulo}', descricao='{descricao}', solicitante='{solicitante}', priority='{priority}' WHERE id={id}")
         conn.commit()
         conn.close()
         return redirect('/')
