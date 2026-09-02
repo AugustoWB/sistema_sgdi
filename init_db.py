@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS demandas (
     descricao TEXT,
     solicitante TEXT,
     data_criacao TEXT,
-    priority TEXT
+    priority INTEGER DEFAULT 0
 )
 ''')
 
