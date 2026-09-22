@@ -1,42 +1,171 @@
 {% extends "base.html" %}
 
 {% block content %}
+
 <h2>Lista de Demandas</h2>
 
+<!-- FILTRO POR SOLICITANTE -->
+
+<form method="GET" action="/" style="margin-bottom: 20px;">
+
+    <label for="usuario_id">
+        <strong>Filtrar por solicitante:</strong>
+    </label>
+
+    <select name="usuario_id" id="usuario_id">
+
+        <option value="">
+            Todos os solicitantes
+        </option>
+
+        {% for usuario in usuarios %}
+
+            <option
+                value="{{ usuario[0] }}"
+                {% if usuario_selecionado|string == usuario[0]|string %}
+                    selected
+                {% endif %}
+            >
+                {{ usuario[1] }}
+            </option>
+
+        {% endfor %}
+
+    </select>
+
+    <button type="submit">
+        Filtrar
+    </button>
+
+    <a href="/">
+        <button type="button">
+            Limpar
+        </button>
+    </a>
+
+</form>
+
+
+<!-- TABELA -->
 
 <table border="1" cellpadding="10" cellspacing="0" width="100%">
+
     <thead>
+
         <tr bgcolor="#cccccc">
+
             <th>ID</th>
             <th>Título</th>
             <th>Solicitante</th>
             <th>Data</th>
             <th>Prioridade</th>
             <th>Ações</th>
+
         </tr>
+
     </thead>
+
     <tbody>
+
         {% for demanda in demandas %}
+
         <tr>
-            <td>{{ demanda[0] }}</td>
-            <td>{{ demanda[1] }}</td>
-            <td>{{ demanda[3] }}</td>
-            <td>{{ demanda[4] }}</td>
-            <td> {% if demanda[5] == 3 %} <span style="color: red; font-weight: bold;">Alta</span> {% elif demanda[5] == 2 %} <span style="color: orange; font-weight: bold;">Média</span> {% elif demanda[5] == 1 %} <span style="color: blue; font-weight: bold;">Baixa</span> {% else %} <span style="color: gray;">Nenhuma</span> {% endif %} </td>
+
             <td>
-                <a href="/detalhes/{{ demanda[0] }}">Ver</a>
-                |
-                <a href="/editar/{{ demanda[0] }}">Editar</a>
-                |
-                <a href="/deletar/{{ demanda[0] }}" style="color:red;">Deletar</a>
+                {{ demanda[0] }}
             </td>
+
+            <td>
+                {{ demanda[1] }}
+            </td>
+
+            <td>
+                {{ demanda[3] }}
+            </td>
+
+            <td>
+                {{ demanda[4] }}
+            </td>
+
+            <td>
+
+                {% if demanda[5] == 3 %}
+
+                    <span style="color: red; font-weight: bold;">
+                        Alta
+                    </span>
+
+                {% elif demanda[5] == 2 %}
+
+                    <span style="color: orange; font-weight: bold;">
+                        Média
+                    </span>
+
+                {% elif demanda[5] == 1 %}
+
+                    <span style="color: blue; font-weight: bold;">
+                        Baixa
+                    </span>
+
+                {% else %}
+
+                    <span style="color: gray;">
+                        Nenhuma
+                    </span>
+
+                {% endif %}
+
+            </td>
+
+            <td>
+
+                <a href="/detalhes/{{ demanda[0] }}">
+                    Ver
+                </a>
+
+                |
+
+                <a href="/editar/{{ demanda[0] }}">
+                    Editar
+                </a>
+
+                |
+
+                <a
+                    href="/deletar/{{ demanda[0] }}"
+                    style="color: red;"
+                    onclick="return confirm('Tem certeza que deseja deletar esta demanda?');"
+                >
+                    Deletar
+                </a>
+
+            </td>
+
         </tr>
+
+        {% else %}
+
+        <tr>
+
+            <td colspan="6" style="text-align: center;">
+
+                Nenhuma demanda encontrada.
+
+            </td>
+
+        </tr>
+
         {% endfor %}
+
     </tbody>
+
 </table>
 
+<br>
+<br>
 
-<br><br>
-<a href="/nova_demanda"><button>+ Nova Demanda</button></a>
+<a href="/nova_demanda">
+    <button>+ Nova Demanda</button>
+</a>
 
 {% endblock %}

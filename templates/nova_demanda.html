@@ -1,39 +1,97 @@
 {% extends "base.html" %}
 
 {% block content %}
+
 <h2>Nova Demanda</h2>
 
 <form method="POST" action="/nova_demanda">
+
     <div>
         <label>Título:</label><br>
-        <input type="text" name="titulo" size="50">
+
+        <input
+            type="text"
+            name="titulo"
+            size="50"
+            required
+        >
     </div>
+
     <br>
-    
+
     <div>
         <label>Descrição:</label><br>
-        <textarea name="descricao" rows="5" cols="50"></textarea>
+
+        <textarea
+            name="descricao"
+            rows="5"
+            cols="50"
+            required
+        ></textarea>
     </div>
+
     <br>
-    
+
     <div>
         <label>Solicitante:</label><br>
-        <input type="text" name="solicitante">
+
+        <select name="usuario_id" required>
+
+            <option value="">
+                Selecione um solicitante
+            </option>
+
+            {% for usuario in usuarios %}
+
+                <option value="{{ usuario[0] }}">
+                    {{ usuario[1] }} - {{ usuario[2] }}
+                </option>
+
+            {% endfor %}
+
+        </select>
+
     </div>
+
     <br>
 
     <div>
         <label>Prioridade:</label><br>
+
         <select name="priority">
-            <option value="0">Nenhuma</option>
-            <option value="1">Baixa</option>
-            <option value="2">Média</option>
-            <option value="3">Alta</option>
+
+            <option value="0">
+                Nenhuma
+            </option>
+
+            <option value="1">
+                Baixa
+            </option>
+
+            <option value="2">
+                Média
+            </option>
+
+            <option value="3">
+                Alta
+            </option>
+
         </select>
+
     </div>
-    
-    <button type="submit">Salvar</button>
-    <a href="/"><button type="button">Cancelar</button></a>
+
+    <br>
+
+    <button type="submit">
+        Salvar
+    </button>
+
+    <a href="/">
+        <button type="button">
+            Cancelar
+        </button>
+    </a>
+
 </form>
 
 {% endblock %}

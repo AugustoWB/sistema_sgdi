@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>Relatório de Demandas por Solicitante</h2>
+
+<p>
+    Este relatório apresenta a quantidade de demandas associadas
+    a cada usuário cadastrado no sistema.
+</p>
+
+<br>
+
+<table border="1" cellpadding="10" cellspacing="0" width="100%">
+
+    <thead>
+
+        <tr bgcolor="#cccccc">
+            <th>ID</th>
+            <th>Solicitante</th>
+            <th>E-mail</th>
+            <th>Total de Demandas</th>
+            <th>Ações</th>
+        </tr>
+
+    </thead>
+
+    <tbody>
+
+        {% for usuario in relatorio %}
+
+        <tr>
+
+            <td>
+                {{ usuario[0] }}
+            </td>
+
+            <td>
+                {{ usuario[1] }}
+            </td>
+
+            <td>
+                {{ usuario[2] }}
+            </td>
+
+            <td style="text-align: center; font-weight: bold;">
+                {{ usuario[3] }}
+            </td>
+
+            <td>
+
+                <a href="/?usuario_id={{ usuario[0] }}">
+                    Ver demandas
+                </a>
+
+            </td>
+
+        </tr>
+
+        {% else %}
+
+        <tr>
+
+            <td colspan="5" style="text-align: center;">
+                Nenhum usuário encontrado.
+            </td>
+
+        </tr>
+
+        {% endfor %}
+
+    </tbody>
+
+</table>
+
+<br>
+
+<a href="/">
+    <button type="button">Voltar</button>
+</a>
+
+{% endblock %}
