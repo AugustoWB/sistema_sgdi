@@ -1,46 +1,131 @@
 {% extends "base.html" %}
 
 {% block content %}
+
 <h2>Editar Demanda</h2>
 
-
 <form method="POST" action="/editar/{{ demanda[0] }}">
+
     <div>
+
         <label>Título:</label><br>
-        <input type="text" name="titulo" value="{{ demanda[1] }}" size="50">
+
+        <input
+            type="text"
+            name="titulo"
+            value="{{ demanda[1] }}"
+            size="50"
+            required
+        >
+
     </div>
+
     <br>
-    
+
     <div>
+
         <label>Descrição:</label><br>
-        <textarea name="descricao" rows="5" cols="50">{{ demanda[2] }}</textarea>
+
+        <textarea
+            name="descricao"
+            rows="5"
+            cols="50"
+            required
+        >{{ demanda[2] }}</textarea>
+
     </div>
+
     <br>
-    
+
     <div>
+
         <label>Solicitante:</label><br>
-        <input type="text" name="solicitante" value="{{ demanda[3] }}">
-    </div>
-    <br>
-    
-    <div>
-        <label>Data de Criação:</label><br>
-        <input type="text" value="{{ demanda[4] }}" disabled>
-    </div>
-    <br>
-    <div>
-        <label>Prioridade:</label><br>
-        <select name="priority">
-            <option value="0" {% if demanda[5] == 0 %}selected{% endif %}>Nenhuma</option>
-            <option value="1" {% if demanda[5] == 1 %}selected{% endif %}>Baixa</option>
-            <option value="2" {% if demanda[5] == 2 %}selected{% endif %}>Média</option>
-            <option value="3" {% if demanda[5] == 3 %}selected{% endif %}>Alta</option>
+
+        <select name="usuario_id" required>
+
+            {% for usuario in usuarios %}
+
+                <option
+                    value="{{ usuario[0] }}"
+                    {% if usuario[0] == demanda[3] %}
+                        selected
+                    {% endif %}
+                >
+                    {{ usuario[1] }} - {{ usuario[2] }}
+                </option>
+
+            {% endfor %}
+
         </select>
+
     </div>
+
     <br>
-    
-    <button type="submit">Atualizar</button>
-    <a href="/"><button type="button">Cancelar</button></a>
+
+    <div>
+
+        <label>Data de Criação:</label><br>
+
+        <input
+            type="text"
+            value="{{ demanda[4] }}"
+            disabled
+        >
+
+    </div>
+
+    <br>
+
+    <div>
+
+        <label>Prioridade:</label><br>
+
+        <select name="priority">
+
+            <option
+                value="0"
+                {% if demanda[5] == 0 %}selected{% endif %}
+            >
+                Nenhuma
+            </option>
+
+            <option
+                value="1"
+                {% if demanda[5] == 1 %}selected{% endif %}
+            >
+                Baixa
+            </option>
+
+            <option
+                value="2"
+                {% if demanda[5] == 2 %}selected{% endif %}
+            >
+                Média
+            </option>
+
+            <option
+                value="3"
+                {% if demanda[5] == 3 %}selected{% endif %}
+            >
+                Alta
+            </option>
+
+        </select>
+
+    </div>
+
+    <br>
+
+    <button type="submit">
+        Atualizar
+    </button>
+
+    <a href="/">
+        <button type="button">
+            Cancelar
+        </button>
+    </a>
+
 </form>
 
 {% endblock %}
