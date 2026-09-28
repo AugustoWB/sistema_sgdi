@@ -3,7 +3,7 @@
 body {
     font-family: Arial, sans-serif;
     background-color: #f5f5f5;
-    padding: 0;
+    padding: 0 0 80px;
     margin: 0;
 }
 
@@ -31,6 +31,13 @@ body {
 
 .menu a:hover {
     text-decoration: underline;
+}
+
+.menu form input[type="search"] {
+    padding: 8px;
+    border: 1px solid #ddd;
+    min-width: 180px;
+    margin-left: 12px;
 }
 
 .container {
@@ -89,6 +96,30 @@ form div {
     margin-bottom: 10px;
 }
 
+.filtros {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px 16px;
+    margin-bottom: 20px;
+}
+
+.filtros div {
+    margin-bottom: 0;
+}
+
+.filtros label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.filtros select {
+    padding: 8px;
+    border: 1px solid #ddd;
+    min-width: 160px;
+}
+
 input[type="text"], textarea {
     padding: 8px;
     border: 1px solid #ddd;
@@ -96,4 +127,74 @@ input[type="text"], textarea {
 
 textarea {
     resize: vertical;
+}
+
+.paginacao {
+    margin-top: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 24px;
+}
+
+.paginacao-info {
+    margin: 0;
+}
+
+.paginacao-tamanho {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.paginacao-tamanho select {
+    padding: 8px;
+    border: 1px solid #ddd;
+}
+
+.paginacao-tamanho button {
+    padding: 8px 14px;
+}
+
+.paginacao-controles {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.paginacao-controles a,
+.paginacao-controles span {
+    display: inline-block;
+    min-width: 36px;
+    padding: 8px 12px;
+    text-align: center;
+    border: 1px solid #ccc;
+    background: #fff;
+    color: #333;
+    text-decoration: none;
+    box-sizing: border-box;
+}
+
+.paginacao-controles a:hover {
+    background: #f0f0f0;
+}
+
+.paginacao-controles span.ativa {
+    background: #333;
+    color: #fff;
+    border-color: #333;
+    font-weight: bold;
+}
+
+.paginacao-controles span.desabilitado {
+    color: #aaa;
+    background: #fafafa;
+    border-color: #eee;
+}
+
+.paginacao-controles span.reticencias {
+    border: none;
+    background: transparent;
+    min-width: 0;
+    padding: 8px 4px;
 }

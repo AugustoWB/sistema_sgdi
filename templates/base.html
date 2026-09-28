@@ -45,15 +45,20 @@
             </a>
 
             <form
+                id="form-busca"
                 action="/buscar"
                 method="GET"
                 style="display:inline;"
             >
 
                 <input
-                    type="text"
+                    id="campo-busca"
+                    type="search"
                     name="q"
-                    placeholder="Buscar"
+                    value="{{ termo|default('', true) }}"
+                    placeholder="Título ou ID"
+                    aria-label="Buscar por título ou ID"
+                    autocomplete="off"
                 >
 
                 <button type="submit">
@@ -106,6 +111,8 @@
         </p>
 
     </div>
+
+    <script src="{{ url_for('static', filename='busca.js') }}"></script>
 
 </body>
 

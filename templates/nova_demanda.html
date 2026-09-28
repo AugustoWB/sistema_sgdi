@@ -82,6 +82,34 @@
 
     <br>
 
+    <div>
+        <label>Status:</label><br>
+
+        <select name="status">
+            <option value="aberta">Aberta</option>
+            <option value="em_andamento">Em Andamento</option>
+            <option value="concluida">Concluída</option>
+            <option value="cancelada">Cancelada</option>
+        </select>
+    </div>
+
+    <br>
+
+    <div>
+        <label>Responsável:</label><br>
+
+        <select name="responsible_id">
+            <option value="">Sem responsável</option>
+            {% for usuario in usuarios %}
+                <option value="{{ usuario[0] }}">
+                    {{ usuario[1] }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <br>
+
     <button type="submit">
         Salvar
     </button>

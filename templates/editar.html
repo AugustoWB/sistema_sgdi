@@ -116,6 +116,37 @@
 
     <br>
 
+    <div>
+        <label>Status:</label><br>
+
+        <select name="status">
+            <option value="aberta" {% if demanda[6] == 'aberta' %}selected{% endif %}>Aberta</option>
+            <option value="em_andamento" {% if demanda[6] == 'em_andamento' %}selected{% endif %}>Em Andamento</option>
+            <option value="concluida" {% if demanda[6] == 'concluida' %}selected{% endif %}>Concluída</option>
+            <option value="cancelada" {% if demanda[6] == 'cancelada' %}selected{% endif %}>Cancelada</option>
+        </select>
+    </div>
+
+    <br>
+
+    <div>
+        <label>Responsável:</label><br>
+
+        <select name="responsible_id">
+            <option value="">Sem responsável</option>
+            {% for usuario in usuarios %}
+                <option
+                    value="{{ usuario[0] }}"
+                    {% if usuario[0]|string == demanda[7]|string %}selected{% endif %}
+                >
+                    {{ usuario[1] }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <br>
+
     <button type="submit">
         Atualizar
     </button>
