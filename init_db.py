@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS demandas (
     priority INTEGER DEFAULT 0,
     usuario_id INTEGER,
     status TEXT DEFAULT 'aberta',
-    responsible_id INTEGER
+    responsible_id INTEGER,
+    data_conclusao TEXT
 )
 ''')
 
@@ -59,6 +60,9 @@ if 'status' not in colunas:
 
 if 'responsible_id' not in colunas:
     cursor.execute('ALTER TABLE demandas ADD COLUMN responsible_id INTEGER')
+
+if 'data_conclusao' not in colunas:
+    cursor.execute('ALTER TABLE demandas ADD COLUMN data_conclusao TEXT')
 
 cursor.execute('CREATE INDEX IF NOT EXISTS idx_demandas_status ON demandas (status)')
 cursor.execute('CREATE INDEX IF NOT EXISTS idx_demandas_priority ON demandas (priority)')

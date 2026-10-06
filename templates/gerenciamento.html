@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>Gerenciamento</h2>
+
+<p>
+    Números gerais das demandas: volume, situação, criticidade,
+    distribuição por responsável e tempo médio de resolução.
+</p>
+
+<section class="kpis" aria-label="Indicadores de demandas">
+
+    <article class="kpi">
+        <p class="kpi-rotulo">Total de demandas</p>
+        <p class="kpi-valor">{{ indicadores.total }}</p>
+        <p class="kpi-nota">Todas as demandas cadastradas</p>
+    </article>
+
+    <article class="kpi">
+        <p class="kpi-rotulo">Abertas</p>
+        <p class="kpi-valor">{{ indicadores.abertas }}</p>
+        <p class="kpi-nota">
+            {{ indicadores.status_aberta }} com status aberta
+            e {{ indicadores.em_andamento }} em andamento
+        </p>
+    </article>
+
+    <article class="kpi kpi-concluidas">
+        <p class="kpi-rotulo">Concluídas</p>
+        <p class="kpi-valor">{{ indicadores.concluidas }}</p>
+        <p class="kpi-nota">
+            <a href="/?status=concluida">Ver na listagem</a>
+        </p>
+    </article>
+
+    <article class="kpi kpi-atrasadas">
+        <p class="kpi-rotulo">Atrasadas</p>
+        <p class="kpi-valor">{{ indicadores.atrasadas }}</p>
+        <p class="kpi-nota">
+            Abertas há mais de {{ indicadores.prazo_dias }} dias
+        </p>
+    </article>
+
+    <article class="kpi kpi-criticas">
+        <p class="kpi-rotulo">Críticas</p>
+        <p class="kpi-valor">{{ indicadores.criticas }}</p>
+        <p class="kpi-nota">Prioridade alta ainda em aberto</p>
+    </article>
+
+    <article class="kpi kpi-tempo">
+        <p class="kpi-rotulo">Tempo médio de resolução</p>
+        <p class="kpi-valor kpi-valor-texto">
+            {% if indicadores.tempo_medio %}
+                {{ indicadores.tempo_medio }}
+            {% else %}
+                —
+            {% endif %}
+        </p>
+        <p class="kpi-nota">
+            {% if indicadores.tempo_medio %}
+                Da criação até a conclusão
+            {% else %}
+                Nenhuma concluída com data de conclusão
+            {% endif %}
+        </p>
+    </article>
+
+</section>
+
+{% if indicadores.canceladas or indicadores.concluidas_sem_data %}
+<p class="kpi-complemento">
+    {% if indicadores.canceladas %}
+        Canceladas: {{ indicadores.canceladas }}.
+    {% endif %}
+    {% if indicadores.concluidas_sem_data %}
+        {{ indicadores.concluidas_sem_data }} concluída(s) ainda sem data de conclusão
+        e fora do tempo médio.
+    {% endif %}
+</p>
+{% endif %}
+
+<h3>Por responsável</h3>
+
+<table id="tabela-responsaveis" border="1" cellpadding="10" cellspacing="0" width="100%">
+
+    <thead>
+        <tr bgcolor="#cccccc">
+            <th>Responsável</th>
+            <th>Total</th>
+            <th>Abertas</th>
+            <th>Concluídas</th>
+            <th>Atrasadas</th>
+            <th>Críticas</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        {% for linha in indicadores.por_responsavel %}
+        <tr>
+            <td>
+                {% if linha['id'] %}
+                    <a href="/?responsibleId={{ linha['id'] }}">{{ linha['nome'] }}</a>
+                {% else %}
+                    {{ linha['nome'] }}
+                {% endif %}
+            </td>
+            <td>{{ linha['total'] }}</td>
+            <td>{{ linha['abertas'] }}</td>
+            <td>{{ linha['concluidas'] }}</td>
+            <td>{{ linha['atrasadas'] }}</td>
+            <td>{{ linha['criticas'] }}</td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="6" style="text-align: center;">
+                Nenhuma demanda cadastrada.
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+
+</table>
+
+<p class="kpi-legenda">
+    Abertas reúnem os status aberta e em andamento.
+    Atrasada é a demanda aberta criada há mais de {{ indicadores.prazo_dias }} dias.
+    Crítica é a de prioridade alta que ainda está em aberto.
+    O tempo médio usa somente demandas concluídas que já têm data de conclusão.
+</p>
+
+{% endblock %}

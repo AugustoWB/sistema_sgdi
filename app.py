@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, render_template, request, redirect, flash
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 app = Flask(__name__)
@@ -19,6 +19,9 @@ STATUS_ROTULOS = {
     'cancelada': 'Cancelada',
 }
 PRIORIDADES_PERMITIDAS = (0, 1, 2, 3)
+PRIORIDADE_CRITICA = 3
+PRAZO_RESOLUCAO_DIAS = 30
+STATUS_EM_ABERTO = ('aberta', 'em_andamento')
 
 
 def get_db():
@@ -48,6 +51,11 @@ def preparar_banco(conn):
     if 'responsible_id' not in colunas:
         conn.execute(
             'ALTER TABLE demandas ADD COLUMN responsible_id INTEGER'
+        )
+
+    if 'data_conclusao' not in colunas:
+        conn.execute(
+            'ALTER TABLE demandas ADD COLUMN data_conclusao TEXT'
         )
 
     conn.execute(
@@ -316,6 +324,209 @@ def consultar_demandas_paginadas(
     }
 
 
+def definir_data_conclusao(status, registro_atual=None, agora=None):
+    """
+    Grava a conclusão só na passagem para concluída.
+    Demandas já concluídas mantêm a data anterior, inclusive quando ela não existe.
+    """
+
+    if status != 'concluida':
+        return None
+
+    if registro_atual is not None and registro_atual['status'] == 'concluida':
+        return registro_atual['data_conclusao']
+
+    momento = agora or datetime.now()
+    return momento.strftime('%Y-%m-%d %H:%M:%S')
+
+
+def formatar_duracao(segundos):
+    """Texto curto para o tempo médio, com vírgula decimal."""
+
+    if segundos is None:
+        return None
+
+    if segundos >= 86400:
+        dias = segundos / 86400
+        texto = f'{dias:.1f}'.replace('.', ',')
+        unidade = 'dia' if texto == '1,0' else 'dias'
+        return f'{texto} {unidade}'
+
+    if segundos >= 3600:
+        horas = segundos / 3600
+        texto = f'{horas:.1f}'.replace('.', ',')
+        unidade = 'hora' if texto == '1,0' else 'horas'
+        return f'{texto} {unidade}'
+
+    minutos = max(1, round(segundos / 60))
+    unidade = 'minuto' if minutos == 1 else 'minutos'
+    return f'{minutos} {unidade}'
+
+
+def calcular_indicadores(conn, agora=None):
+    """
+    KPIs da área de gerenciamento.
+
+    Abertas: status aberta ou em andamento.
+    Atrasadas: abertas criadas há mais de 30 dias.
+    Críticas: prioridade alta ainda em aberto.
+    Tempo médio: criação até data_conclusao, só das concluídas que têm essa data.
+    """
+
+    momento = agora or datetime.now()
+    limite_atraso = (
+        momento - timedelta(days=PRAZO_RESOLUCAO_DIAS)
+    ).strftime('%Y-%m-%d %H:%M:%S')
+
+    totais = conn.execute(
+        '''
+        SELECT
+            COUNT(*) AS total,
+            COALESCE(SUM(
+                CASE WHEN status IN ('aberta', 'em_andamento') THEN 1 ELSE 0 END
+            ), 0) AS abertas,
+            COALESCE(SUM(
+                CASE WHEN status = 'aberta' THEN 1 ELSE 0 END
+            ), 0) AS status_aberta,
+            COALESCE(SUM(
+                CASE WHEN status = 'em_andamento' THEN 1 ELSE 0 END
+            ), 0) AS em_andamento,
+            COALESCE(SUM(
+                CASE WHEN status = 'concluida' THEN 1 ELSE 0 END
+            ), 0) AS concluidas,
+            COALESCE(SUM(
+                CASE WHEN status = 'cancelada' THEN 1 ELSE 0 END
+            ), 0) AS canceladas,
+            COALESCE(SUM(
+                CASE
+                    WHEN status IN ('aberta', 'em_andamento')
+                     AND data_criacao < ?
+                    THEN 1 ELSE 0
+                END
+            ), 0) AS atrasadas,
+            COALESCE(SUM(
+                CASE
+                    WHEN priority = ?
+                     AND status IN ('aberta', 'em_andamento')
+                    THEN 1 ELSE 0
+                END
+            ), 0) AS criticas,
+            COALESCE(SUM(
+                CASE
+                    WHEN status = 'concluida'
+                     AND (data_conclusao IS NULL OR TRIM(data_conclusao) = '')
+                    THEN 1 ELSE 0
+                END
+            ), 0) AS concluidas_sem_data
+        FROM demandas
+        ''',
+        (limite_atraso, PRIORIDADE_CRITICA)
+    ).fetchone()
+
+    media = conn.execute(
+        '''
+        SELECT AVG(
+            (julianday(data_conclusao) - julianday(data_criacao)) * 86400.0
+        )
+        FROM demandas
+        WHERE status = 'concluida'
+          AND data_conclusao IS NOT NULL
+          AND TRIM(data_conclusao) != ''
+          AND data_criacao IS NOT NULL
+          AND julianday(data_conclusao) >= julianday(data_criacao)
+        '''
+    ).fetchone()[0]
+
+    por_responsavel = conn.execute(
+        '''
+        SELECT
+            demandas.responsible_id AS id,
+            CASE
+                WHEN demandas.responsible_id IS NULL THEN 'Sem responsável'
+                ELSE COALESCE(
+                    responsavel.nome,
+                    'Responsável ' || demandas.responsible_id
+                )
+            END AS nome,
+            COUNT(demandas.id) AS total,
+            COALESCE(SUM(
+                CASE
+                    WHEN demandas.status IN ('aberta', 'em_andamento')
+                    THEN 1 ELSE 0
+                END
+            ), 0) AS abertas,
+            COALESCE(SUM(
+                CASE WHEN demandas.status = 'concluida' THEN 1 ELSE 0 END
+            ), 0) AS concluidas,
+            COALESCE(SUM(
+                CASE
+                    WHEN demandas.status IN ('aberta', 'em_andamento')
+                     AND demandas.data_criacao < ?
+                    THEN 1 ELSE 0
+                END
+            ), 0) AS atrasadas,
+            COALESCE(SUM(
+                CASE
+                    WHEN demandas.priority = ?
+                     AND demandas.status IN ('aberta', 'em_andamento')
+                    THEN 1 ELSE 0
+                END
+            ), 0) AS criticas
+        FROM demandas
+        LEFT JOIN usuarios AS responsavel
+            ON demandas.responsible_id = responsavel.id
+        GROUP BY demandas.responsible_id, responsavel.nome
+        ORDER BY total DESC, nome
+        ''',
+        (limite_atraso, PRIORIDADE_CRITICA)
+    ).fetchall()
+
+    segundos = None if media is None else float(media)
+
+    return {
+        'total': int(totais['total']),
+        'abertas': int(totais['abertas']),
+        'status_aberta': int(totais['status_aberta']),
+        'em_andamento': int(totais['em_andamento']),
+        'concluidas': int(totais['concluidas']),
+        'canceladas': int(totais['canceladas']),
+        'atrasadas': int(totais['atrasadas']),
+        'criticas': int(totais['criticas']),
+        'concluidas_sem_data': int(totais['concluidas_sem_data']),
+        'tempo_medio_segundos': segundos,
+        'tempo_medio': formatar_duracao(segundos),
+        'prazo_dias': PRAZO_RESOLUCAO_DIAS,
+        'por_responsavel': por_responsavel,
+    }
+
+
+def indicadores_para_json(indicadores):
+    return {
+        'total': indicadores['total'],
+        'abertas': indicadores['abertas'],
+        'emAndamento': indicadores['em_andamento'],
+        'concluidas': indicadores['concluidas'],
+        'canceladas': indicadores['canceladas'],
+        'atrasadas': indicadores['atrasadas'],
+        'criticas': indicadores['criticas'],
+        'tempoMedioResolucaoSegundos': indicadores['tempo_medio_segundos'],
+        'tempoMedioResolucao': indicadores['tempo_medio'],
+        'prazoDias': indicadores['prazo_dias'],
+        'porResponsavel': [
+            {
+                'id': linha['id'],
+                'nome': linha['nome'],
+                'total': int(linha['total']),
+                'abertas': int(linha['abertas']),
+                'concluidas': int(linha['concluidas']),
+                'atrasadas': int(linha['atrasadas']),
+                'criticas': int(linha['criticas']),
+            }
+            for linha in indicadores['por_responsavel']
+        ],
+    }
+
+
 def listar_usuarios(conn):
     return conn.execute(
         '''
@@ -459,6 +670,8 @@ def nova_demanda():
         if status not in STATUS_PERMITIDOS:
             status = 'aberta'
 
+        data_conclusao = definir_data_conclusao(status)
+
         # Descobre o próximo ID
         resultado = conn.execute(
             'SELECT MAX(id) FROM demandas'
@@ -478,9 +691,10 @@ def nova_demanda():
                 data_criacao,
                 priority,
                 status,
-                responsible_id
+                responsible_id,
+                data_conclusao
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
                 novo_id,
@@ -490,7 +704,8 @@ def nova_demanda():
                 datetime.now(),
                 priority,
                 status,
-                responsible_id
+                responsible_id,
+                data_conclusao
             )
         )
 
@@ -539,6 +754,17 @@ def editar(id):
         if status not in STATUS_PERMITIDOS:
             status = 'aberta'
 
+        atual = conn.execute(
+            '''
+            SELECT status, data_conclusao
+            FROM demandas
+            WHERE id = ?
+            ''',
+            (id,)
+        ).fetchone()
+
+        data_conclusao = definir_data_conclusao(status, atual)
+
         conn.execute(
             '''
             UPDATE demandas
@@ -548,7 +774,8 @@ def editar(id):
                 usuario_id = ?,
                 priority = ?,
                 status = ?,
-                responsible_id = ?
+                responsible_id = ?,
+                data_conclusao = ?
             WHERE id = ?
             ''',
             (
@@ -558,6 +785,7 @@ def editar(id):
                 priority,
                 status,
                 responsible_id,
+                data_conclusao,
                 id
             )
         )
@@ -751,6 +979,33 @@ def adicionar_comentario(demanda_id):
     return redirect(
         f'/detalhes/{demanda_id}'
     )
+
+
+# ============================================================
+# GERENCIAMENTO - KPIs DE DEMANDAS
+# ============================================================
+
+@app.route('/gerenciamento')
+def gerenciamento():
+
+    conn = get_db()
+    indicadores = calcular_indicadores(conn)
+    conn.close()
+
+    return render_template(
+        'gerenciamento.html',
+        indicadores=indicadores,
+    )
+
+
+@app.route('/api/gerenciamento')
+def api_gerenciamento():
+
+    conn = get_db()
+    indicadores = calcular_indicadores(conn)
+    conn.close()
+
+    return jsonify(indicadores_para_json(indicadores))
 
 
 # ============================================================
