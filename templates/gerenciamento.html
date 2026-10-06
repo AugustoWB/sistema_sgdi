@@ -9,18 +9,80 @@
     distribuição por responsável e tempo médio de resolução.
 </p>
 
+<form class="filtros" id="filtros-gerenciamento" method="GET" action="/gerenciamento">
+
+    <div>
+        <label for="status">Status</label>
+        <select name="status" id="status">
+            <option value="">Todos</option>
+            {% for codigo, rotulo in status_rotulos.items() %}
+                <option value="{{ codigo }}" {% if status == codigo %}selected{% endif %}>
+                    {{ rotulo }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div>
+        <label for="priority">Prioridade</label>
+        <select name="priority" id="priority">
+            <option value="">Todas</option>
+            <option value="3" {% if priority == 3 %}selected{% endif %}>Alta</option>
+            <option value="2" {% if priority == 2 %}selected{% endif %}>Média</option>
+            <option value="1" {% if priority == 1 %}selected{% endif %}>Baixa</option>
+            <option value="0" {% if priority == 0 %}selected{% endif %}>Nenhuma</option>
+        </select>
+    </div>
+
+    <div>
+        <label for="responsibleId">Responsável</label>
+        <select name="responsibleId" id="responsibleId">
+            <option value="">Todos</option>
+            {% for usuario in usuarios %}
+                <option
+                    value="{{ usuario[0] }}"
+                    {% if responsible_id|string == usuario[0]|string %}selected{% endif %}
+                >
+                    {{ usuario[1] }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <button type="submit">Filtrar</button>
+
+    <a href="/gerenciamento">
+        <button type="button">Limpar filtros</button>
+    </a>
+
+</form>
+
+<p class="kpi-escopo" id="kpi-escopo">
+    {% if filtros_ativos %}
+        Exibindo {{ indicadores.total }} demanda(s) do filtro atual.
+    {% else %}
+        Exibindo todas as {{ indicadores.total }} demandas.
+    {% endif %}
+</p>
+
 <section class="kpis" aria-label="Indicadores de demandas">
 
     <article class="kpi">
         <p class="kpi-rotulo">Total de demandas</p>
-        <p class="kpi-valor">{{ indicadores.total }}</p>
-        <p class="kpi-nota">Todas as demandas cadastradas</p>
+        <p class="kpi-valor" id="kpi-total">{{ indicadores.total }}</p>
+        <p class="kpi-nota" id="kpi-total-nota">
+            {% if filtros_ativos %}
+                Demandas do filtro atual
+            {% else %}
+                Todas as demandas cadastradas
+            {% endif %}
+        </p>
     </article>
 
     <article class="kpi">
         <p class="kpi-rotulo">Abertas</p>
-        <p class="kpi-valor">{{ indicadores.abertas }}</p>
-        <p class="kpi-nota">
+        <p class="kpi-valor" id="kpi-abertas">{{ indicadores.abertas }}</p>
+        <p class="kpi-nota" id="kpi-abertas-nota">
             {{ indicadores.status_aberta }} com status aberta
             e {{ indicadores.em_andamento }} em andamento
         </p>
@@ -28,15 +90,15 @@
 
     <article class="kpi kpi-concluidas">
         <p class="kpi-rotulo">Concluídas</p>
-        <p class="kpi-valor">{{ indicadores.concluidas }}</p>
+        <p class="kpi-valor" id="kpi-concluidas">{{ indicadores.concluidas }}</p>
         <p class="kpi-nota">
-            <a href="/?status=concluida">Ver na listagem</a>
+            <a id="link-concluidas" href="{{ link_concluidas }}">Ver na listagem</a>
         </p>
     </article>
 
     <article class="kpi kpi-atrasadas">
         <p class="kpi-rotulo">Atrasadas</p>
-        <p class="kpi-valor">{{ indicadores.atrasadas }}</p>
+        <p class="kpi-valor" id="kpi-atrasadas">{{ indicadores.atrasadas }}</p>
         <p class="kpi-nota">
             Abertas há mais de {{ indicadores.prazo_dias }} dias
         </p>
@@ -44,20 +106,20 @@
 
     <article class="kpi kpi-criticas">
         <p class="kpi-rotulo">Críticas</p>
-        <p class="kpi-valor">{{ indicadores.criticas }}</p>
+        <p class="kpi-valor" id="kpi-criticas">{{ indicadores.criticas }}</p>
         <p class="kpi-nota">Prioridade alta ainda em aberto</p>
     </article>
 
     <article class="kpi kpi-tempo">
         <p class="kpi-rotulo">Tempo médio de resolução</p>
-        <p class="kpi-valor kpi-valor-texto">
+        <p class="kpi-valor kpi-valor-texto" id="kpi-tempo">
             {% if indicadores.tempo_medio %}
                 {{ indicadores.tempo_medio }}
             {% else %}
                 —
             {% endif %}
         </p>
-        <p class="kpi-nota">
+        <p class="kpi-nota" id="kpi-tempo-nota">
             {% if indicadores.tempo_medio %}
                 Da criação até a conclusão
             {% else %}
@@ -68,8 +130,7 @@
 
 </section>
 
-{% if indicadores.canceladas or indicadores.concluidas_sem_data %}
-<p class="kpi-complemento">
+<p class="kpi-complemento" id="kpi-complemento">
     {% if indicadores.canceladas %}
         Canceladas: {{ indicadores.canceladas }}.
     {% endif %}
@@ -78,9 +139,70 @@
         e fora do tempo médio.
     {% endif %}
 </p>
-{% endif %}
 
-<h3>Por responsável</h3>
+<h3>Gráficos</h3>
+
+<section class="graficos" aria-label="Gráficos de demandas">
+
+    <article class="grafico">
+        <h4>Por status</h4>
+        <ul class="barras" id="grafico-status" aria-label="Demandas por status">
+            {% for item in indicadores.por_status %}
+            <li>
+                <span class="barra-rotulo">{{ item.rotulo }}</span>
+                <span class="barra-trilho" aria-hidden="true">
+                    <span
+                        class="barra-preenchimento"
+                        style="width: {{ item.largura }}%; background: {{ item.cor }};"
+                    ></span>
+                </span>
+                <span class="barra-valor">{{ item.valor }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </article>
+
+    <article class="grafico">
+        <h4>Por prioridade</h4>
+        <ul class="barras" id="grafico-prioridade" aria-label="Demandas por prioridade">
+            {% for item in indicadores.por_prioridade %}
+            <li>
+                <span class="barra-rotulo">{{ item.rotulo }}</span>
+                <span class="barra-trilho" aria-hidden="true">
+                    <span
+                        class="barra-preenchimento"
+                        style="width: {{ item.largura }}%; background: {{ item.cor }};"
+                    ></span>
+                </span>
+                <span class="barra-valor">{{ item.valor }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </article>
+
+    <article class="grafico grafico-largo">
+        <h4>Por responsável</h4>
+        <ul class="barras" id="grafico-responsavel" aria-label="Demandas por responsável">
+            {% for linha in indicadores.por_responsavel %}
+            <li>
+                <span class="barra-rotulo">{{ linha.nome }}</span>
+                <span class="barra-trilho" aria-hidden="true">
+                    <span
+                        class="barra-preenchimento"
+                        style="width: {{ linha.largura }}%; background: {{ linha.cor }};"
+                    ></span>
+                </span>
+                <span class="barra-valor">{{ linha.total }}</span>
+            </li>
+            {% else %}
+            <li class="barra-vazia">Nenhuma demanda neste filtro.</li>
+            {% endfor %}
+        </ul>
+    </article>
+
+</section>
+
+<h3>Detalhamento por responsável</h3>
 
 <table id="tabela-responsaveis" border="1" cellpadding="10" cellspacing="0" width="100%">
 
@@ -95,26 +217,30 @@
         </tr>
     </thead>
 
-    <tbody>
+    <tbody id="corpo-responsaveis">
         {% for linha in indicadores.por_responsavel %}
         <tr>
             <td>
-                {% if linha['id'] %}
-                    <a href="/?responsibleId={{ linha['id'] }}">{{ linha['nome'] }}</a>
+                {% if linha.id %}
+                    <a href="/?responsibleId={{ linha.id }}{% if status %}&status={{ status }}{% endif %}{% if priority is not none %}&priority={{ priority }}{% endif %}">{{ linha.nome }}</a>
                 {% else %}
-                    {{ linha['nome'] }}
+                    {{ linha.nome }}
                 {% endif %}
             </td>
-            <td>{{ linha['total'] }}</td>
-            <td>{{ linha['abertas'] }}</td>
-            <td>{{ linha['concluidas'] }}</td>
-            <td>{{ linha['atrasadas'] }}</td>
-            <td>{{ linha['criticas'] }}</td>
+            <td>{{ linha.total }}</td>
+            <td>{{ linha.abertas }}</td>
+            <td>{{ linha.concluidas }}</td>
+            <td>{{ linha.atrasadas }}</td>
+            <td>{{ linha.criticas }}</td>
         </tr>
         {% else %}
         <tr>
             <td colspan="6" style="text-align: center;">
-                Nenhuma demanda cadastrada.
+                {% if filtros_ativos %}
+                    Nenhuma demanda encontrada com estes filtros.
+                {% else %}
+                    Nenhuma demanda cadastrada.
+                {% endif %}
             </td>
         </tr>
         {% endfor %}
@@ -127,6 +253,9 @@
     Atrasada é a demanda aberta criada há mais de {{ indicadores.prazo_dias }} dias.
     Crítica é a de prioridade alta que ainda está em aberto.
     O tempo médio usa somente demandas concluídas que já têm data de conclusão.
+    Os gráficos e os números usam o mesmo filtro.
 </p>
+
+<script src="{{ url_for('static', filename='gerenciamento.js') }}"></script>
 
 {% endblock %}

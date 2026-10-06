@@ -4,7 +4,7 @@
 
 <h2>Lista de Demandas</h2>
 
-<form class="filtros" method="GET" action="/">
+<form class="filtros" id="filtros-listagem" method="GET" action="/">
 
     {% if usuario_selecionado %}
         <input type="hidden" name="usuario_id" id="usuario_id" value="{{ usuario_selecionado }}">

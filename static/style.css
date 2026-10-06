@@ -277,3 +277,72 @@ textarea {
 #tabela-responsaveis td:first-child {
     text-align: left;
 }
+
+.kpi-escopo {
+    margin: 0 0 8px;
+    color: #555;
+}
+
+.graficos {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin: 0 0 28px;
+}
+
+.grafico {
+    border: 1px solid #ddd;
+    background: #fff;
+    padding: 16px;
+}
+
+.grafico h4 {
+    margin: 0;
+}
+
+.grafico-largo {
+    grid-column: 1 / -1;
+}
+
+.barras {
+    list-style: none;
+    margin: 14px 0 0;
+    padding: 0;
+}
+
+.barras li {
+    display: grid;
+    grid-template-columns: minmax(96px, 140px) 1fr 40px;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.barras li.barra-vazia {
+    display: block;
+    color: #555;
+}
+
+.barra-rotulo,
+.barra-valor {
+    font-size: 14px;
+}
+
+.barra-valor {
+    text-align: right;
+    font-weight: bold;
+}
+
+.barra-trilho {
+    display: block;
+    height: 14px;
+    background: #eee;
+    border-radius: 7px;
+    overflow: hidden;
+}
+
+.barra-preenchimento {
+    display: block;
+    height: 100%;
+    border-radius: 7px;
+}

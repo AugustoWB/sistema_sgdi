@@ -363,7 +363,57 @@ def formatar_duracao(segundos):
     return f'{minutos} {unidade}'
 
 
-def calcular_indicadores(conn, agora=None):
+def montar_where_gerenciamento(status=None, priority=None, responsible_id=None):
+    """Filtros opcionais da área de gerenciamento, aplicados com AND."""
+
+    partes = []
+    parametros = []
+
+    if status in STATUS_PERMITIDOS:
+        partes.append('demandas.status = ?')
+        parametros.append(status)
+
+    if priority in PRIORIDADES_PERMITIDAS:
+        partes.append('demandas.priority = ?')
+        parametros.append(priority)
+
+    if responsible_id:
+        partes.append('demandas.responsible_id = ?')
+        parametros.append(responsible_id)
+
+    if not partes:
+        return '', []
+
+    return 'WHERE ' + ' AND '.join(partes), parametros
+
+
+def aplicar_largura(itens, chave):
+    maximo = max((item[chave] for item in itens), default=0)
+
+    for item in itens:
+        if maximo:
+            item['largura'] = round(item[chave] * 100 / maximo, 1)
+        else:
+            item['largura'] = 0
+
+    return itens
+
+
+def serie_grafico(pares):
+    itens = [
+        {'rotulo': rotulo, 'valor': valor, 'cor': cor}
+        for rotulo, valor, cor in pares
+    ]
+    return aplicar_largura(itens, 'valor')
+
+
+def calcular_indicadores(
+    conn,
+    agora=None,
+    status=None,
+    priority=None,
+    responsible_id=None,
+):
     """
     KPIs da área de gerenciamento.
 
@@ -371,15 +421,19 @@ def calcular_indicadores(conn, agora=None):
     Atrasadas: abertas criadas há mais de 30 dias.
     Críticas: prioridade alta ainda em aberto.
     Tempo médio: criação até data_conclusao, só das concluídas que têm essa data.
+    Os filtros restringem o conjunto antes dessas contas e dos gráficos.
     """
 
     momento = agora or datetime.now()
     limite_atraso = (
         momento - timedelta(days=PRAZO_RESOLUCAO_DIAS)
     ).strftime('%Y-%m-%d %H:%M:%S')
+    where_sql, filtros = montar_where_gerenciamento(
+        status, priority, responsible_id
+    )
 
     totais = conn.execute(
-        '''
+        f'''
         SELECT
             COUNT(*) AS total,
             COALESCE(SUM(
@@ -417,28 +471,50 @@ def calcular_indicadores(conn, agora=None):
                      AND (data_conclusao IS NULL OR TRIM(data_conclusao) = '')
                     THEN 1 ELSE 0
                 END
-            ), 0) AS concluidas_sem_data
+            ), 0) AS concluidas_sem_data,
+            COALESCE(SUM(
+                CASE WHEN priority IS NULL OR priority = 0 THEN 1 ELSE 0 END
+            ), 0) AS prioridade_nenhuma,
+            COALESCE(SUM(
+                CASE WHEN priority = 1 THEN 1 ELSE 0 END
+            ), 0) AS prioridade_baixa,
+            COALESCE(SUM(
+                CASE WHEN priority = 2 THEN 1 ELSE 0 END
+            ), 0) AS prioridade_media,
+            COALESCE(SUM(
+                CASE WHEN priority = 3 THEN 1 ELSE 0 END
+            ), 0) AS prioridade_alta
         FROM demandas
+        {where_sql}
         ''',
-        (limite_atraso, PRIORIDADE_CRITICA)
+        [limite_atraso, PRIORIDADE_CRITICA] + filtros
     ).fetchone()
 
+    condicoes_media = '''
+        status = 'concluida'
+        AND data_conclusao IS NOT NULL
+        AND TRIM(data_conclusao) != ''
+        AND data_criacao IS NOT NULL
+        AND julianday(data_conclusao) >= julianday(data_criacao)
+    '''
+    if where_sql:
+        where_media = where_sql + ' AND ' + condicoes_media
+    else:
+        where_media = 'WHERE ' + condicoes_media
+
     media = conn.execute(
-        '''
+        f'''
         SELECT AVG(
             (julianday(data_conclusao) - julianday(data_criacao)) * 86400.0
         )
         FROM demandas
-        WHERE status = 'concluida'
-          AND data_conclusao IS NOT NULL
-          AND TRIM(data_conclusao) != ''
-          AND data_criacao IS NOT NULL
-          AND julianday(data_conclusao) >= julianday(data_criacao)
-        '''
+        {where_media}
+        ''',
+        filtros
     ).fetchone()[0]
 
     por_responsavel = conn.execute(
-        '''
+        f'''
         SELECT
             demandas.responsible_id AS id,
             CASE
@@ -475,12 +551,29 @@ def calcular_indicadores(conn, agora=None):
         FROM demandas
         LEFT JOIN usuarios AS responsavel
             ON demandas.responsible_id = responsavel.id
+        {where_sql}
         GROUP BY demandas.responsible_id, responsavel.nome
         ORDER BY total DESC, nome
         ''',
-        (limite_atraso, PRIORIDADE_CRITICA)
+        [limite_atraso, PRIORIDADE_CRITICA] + filtros
     ).fetchall()
 
+    linhas = aplicar_largura(
+        [
+            {
+                'id': linha['id'],
+                'nome': linha['nome'],
+                'total': int(linha['total']),
+                'abertas': int(linha['abertas']),
+                'concluidas': int(linha['concluidas']),
+                'atrasadas': int(linha['atrasadas']),
+                'criticas': int(linha['criticas']),
+                'cor': '#333333',
+            }
+            for linha in por_responsavel
+        ],
+        'total',
+    )
     segundos = None if media is None else float(media)
 
     return {
@@ -496,7 +589,19 @@ def calcular_indicadores(conn, agora=None):
         'tempo_medio_segundos': segundos,
         'tempo_medio': formatar_duracao(segundos),
         'prazo_dias': PRAZO_RESOLUCAO_DIAS,
-        'por_responsavel': por_responsavel,
+        'por_status': serie_grafico([
+            ('Aberta', int(totais['status_aberta']), '#3d5a80'),
+            ('Em andamento', int(totais['em_andamento']), '#e67e22'),
+            ('Concluída', int(totais['concluidas']), '#2e7d32'),
+            ('Cancelada', int(totais['canceladas']), '#8d8d8d'),
+        ]),
+        'por_prioridade': serie_grafico([
+            ('Nenhuma', int(totais['prioridade_nenhuma']), '#9aa0a6'),
+            ('Baixa', int(totais['prioridade_baixa']), '#2980b9'),
+            ('Média', int(totais['prioridade_media']), '#d68910'),
+            ('Alta', int(totais['prioridade_alta']), '#c0392b'),
+        ]),
+        'por_responsavel': linhas,
     }
 
 
@@ -512,19 +617,30 @@ def indicadores_para_json(indicadores):
         'tempoMedioResolucaoSegundos': indicadores['tempo_medio_segundos'],
         'tempoMedioResolucao': indicadores['tempo_medio'],
         'prazoDias': indicadores['prazo_dias'],
-        'porResponsavel': [
-            {
-                'id': linha['id'],
-                'nome': linha['nome'],
-                'total': int(linha['total']),
-                'abertas': int(linha['abertas']),
-                'concluidas': int(linha['concluidas']),
-                'atrasadas': int(linha['atrasadas']),
-                'criticas': int(linha['criticas']),
-            }
-            for linha in indicadores['por_responsavel']
-        ],
+        'concluidasSemData': indicadores['concluidas_sem_data'],
+        'statusAberta': indicadores['status_aberta'],
+        'porStatus': indicadores['por_status'],
+        'porPrioridade': indicadores['por_prioridade'],
+        'porResponsavel': indicadores['por_responsavel'],
     }
+
+
+def link_da_listagem(status=None, priority=None, responsible_id=None):
+    partes = []
+
+    if status:
+        partes.append(f'status={status}')
+
+    if priority is not None:
+        partes.append(f'priority={priority}')
+
+    if responsible_id:
+        partes.append(f'responsibleId={responsible_id}')
+
+    if not partes:
+        return '/'
+
+    return '/?' + '&'.join(partes)
 
 
 def listar_usuarios(conn):
@@ -985,24 +1101,54 @@ def adicionar_comentario(demanda_id):
 # GERENCIAMENTO - KPIs DE DEMANDAS
 # ============================================================
 
+def ler_filtros_gerenciamento():
+    filtros = ler_filtros_da_requisicao()
+    return {
+        'status': filtros['status'],
+        'priority': filtros['priority'],
+        'responsible_id': filtros['responsible_id'],
+    }
+
+
 @app.route('/gerenciamento')
 def gerenciamento():
 
+    filtros = ler_filtros_gerenciamento()
     conn = get_db()
-    indicadores = calcular_indicadores(conn)
+    usuarios = listar_usuarios(conn)
+    indicadores = calcular_indicadores(conn, **filtros)
     conn.close()
+
+    filtros_ativos = any((
+        filtros['status'],
+        filtros['priority'] is not None,
+        filtros['responsible_id'],
+    ))
 
     return render_template(
         'gerenciamento.html',
         indicadores=indicadores,
+        usuarios=usuarios,
+        status=filtros['status'],
+        priority=filtros['priority'],
+        responsible_id=filtros['responsible_id'],
+        status_rotulos=STATUS_ROTULOS,
+        filtros_ativos=filtros_ativos,
+        link_listagem=link_da_listagem(**filtros),
+        link_concluidas=link_da_listagem(
+            status='concluida',
+            priority=filtros['priority'],
+            responsible_id=filtros['responsible_id'],
+        ),
     )
 
 
 @app.route('/api/gerenciamento')
 def api_gerenciamento():
 
+    filtros = ler_filtros_gerenciamento()
     conn = get_db()
-    indicadores = calcular_indicadores(conn)
+    indicadores = calcular_indicadores(conn, **filtros)
     conn.close()
 
     return jsonify(indicadores_para_json(indicadores))

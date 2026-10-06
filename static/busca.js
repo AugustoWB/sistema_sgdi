@@ -396,7 +396,7 @@
         });
     }
 
-    omitirCamposVazios(document.querySelector('form.filtros'));
+    omitirCamposVazios(document.getElementById('filtros-listagem'));
     omitirCamposVazios(document.querySelector('form.paginacao-tamanho'));
 
     campo.addEventListener('input', function () {

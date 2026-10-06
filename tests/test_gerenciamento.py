@@ -180,6 +180,46 @@ class TestCalculoDosIndicadores(unittest.TestCase):
         self.assertEqual(dados['criticas'], 1)
         self.assertEqual(dados['tempoMedioResolucao'], '1,0 dia')
         self.assertEqual(dados['porResponsavel'][0]['nome'], 'Ana Lima')
+        self.assertEqual(dados['porStatus'][0]['rotulo'], 'Aberta')
+        self.assertEqual(dados['porStatus'][0]['valor'], 1)
+        self.assertEqual(dados['porPrioridade'][3]['rotulo'], 'Alta')
+
+    def test_filtro_restringe_numeros_e_graficos(self):
+        inserir(self.conn, 1, 'aberta', 3, 1, '2026-09-01 12:00:00')
+        inserir(
+            self.conn, 2, 'concluida', 1, 2,
+            '2026-10-01 12:00:00', '2026-10-03 12:00:00',
+        )
+        self.conn.commit()
+
+        so_alta = calcular_indicadores(self.conn, AGORA, priority=3)
+        self.assertEqual(so_alta['total'], 1)
+        self.assertEqual(so_alta['criticas'], 1)
+        self.assertEqual(so_alta['por_prioridade'][3]['valor'], 1)
+        self.assertEqual(so_alta['por_prioridade'][3]['largura'], 100)
+        self.assertEqual(so_alta['por_prioridade'][1]['valor'], 0)
+        self.assertEqual(so_alta['por_responsavel'][0]['nome'], 'Ana Lima')
+
+        with app.test_request_context('/gerenciamento?status=concluida'):
+            html = gerenciamento()
+
+        self.assertIn('Por status', html)
+        self.assertIn('Por prioridade', html)
+        self.assertIn('id="grafico-status"', html)
+        self.assertIn('value="concluida"', html)
+        self.assertIn('selected', html)
+        self.assertIn('Exibindo 1 demanda(s) do filtro atual.', html)
+
+        with app.test_request_context(
+            '/api/gerenciamento?status=aberta&responsibleId=1&priority=3'
+        ):
+            dados = api_gerenciamento().get_json()
+
+        self.assertEqual(dados['total'], 1)
+        self.assertEqual(dados['abertas'], 1)
+        self.assertEqual(dados['concluidas'], 0)
+        self.assertEqual(dados['porStatus'][2]['valor'], 0)
+        self.assertEqual(dados['porResponsavel'][0]['id'], 1)
 
     def test_preparar_banco_cria_data_conclusao(self):
         conn = sqlite3.connect(self.arquivo.name)
