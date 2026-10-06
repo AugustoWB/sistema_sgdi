@@ -3,16 +3,22 @@ import sqlite3
 import tempfile
 import unittest
 from datetime import datetime
+from io import BytesIO
+
+from openpyxl import load_workbook
 
 from app import (
     api_gerenciamento,
     app,
     calcular_indicadores,
     definir_data_conclusao,
+    exportar_gerenciamento_excel,
+    exportar_gerenciamento_pdf,
     formatar_duracao,
     gerenciamento,
     get_db,
 )
+from exportacao import descrever_filtros, montar_relatorio
 from test_paginacao import salvar_banco
 
 
@@ -230,3 +236,112 @@ class TestCalculoDosIndicadores(unittest.TestCase):
         conn.close()
 
         self.assertIn('data_conclusao', colunas)
+
+
+class TestExportacaoDoRelatorio(unittest.TestCase):
+
+    def setUp(self):
+        self.arquivo = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
+        self.arquivo.close()
+        self.database_original = app.config.get('DATABASE')
+        app.config['DATABASE'] = self.arquivo.name
+        salvar_banco(self.arquivo.name, 0)
+        self.conn = get_db()
+        inserir(self.conn, 1, 'aberta', 3, 1, '2026-09-01 12:00:00')
+        inserir(
+            self.conn, 2, 'concluida', 1, 2,
+            '2026-10-01 12:00:00', '2026-10-03 12:00:00',
+        )
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        if self.database_original is None:
+            app.config.pop('DATABASE', None)
+        else:
+            app.config['DATABASE'] = self.database_original
+        os.remove(self.arquivo.name)
+
+    def test_filtros_explicitos_inclusive_quando_vazios(self):
+        from app import STATUS_ROTULOS
+
+        texto = descrever_filtros(None, None, None, None, STATUS_ROTULOS)
+        self.assertEqual(
+            texto,
+            'Status: Todos | Prioridade: Todas | Responsável: Todos',
+        )
+        texto = descrever_filtros('concluida', 3, 1, 'Ana Lima', STATUS_ROTULOS)
+        self.assertEqual(
+            texto,
+            'Status: Concluída | Prioridade: Alta | Responsável: Ana Lima',
+        )
+
+    def test_pdf_e_excel_trazem_empresa_data_e_rodape(self):
+        relatorio = montar_relatorio(
+            self.conn, 'concluida', None, 2, AGORA
+        )
+        self.assertEqual(relatorio['empresa'], 'SGDI')
+        self.assertEqual(relatorio['data_geracao'], '06/10/2026 12:00')
+        self.assertIn('Status: Concluída', relatorio['filtros'])
+        self.assertIn('Responsável: Bruno Souza', relatorio['filtros'])
+        self.assertIn('Prioridade: Todas', relatorio['filtros'])
+
+        with app.test_request_context(
+            '/gerenciamento/exportar.pdf?status=concluida&responsibleId=2'
+        ):
+            resposta = exportar_gerenciamento_pdf()
+
+        self.assertEqual(resposta.mimetype, 'application/pdf')
+        self.assertIn('relatorio-gerenciamento-', resposta.headers['Content-Disposition'])
+        resposta.direct_passthrough = False
+        pdf = resposta.get_data()
+        self.assertTrue(pdf.startswith(b'%PDF'))
+        texto_pdf = pdf.decode('latin-1', errors='ignore')
+        self.assertIn('SGDI', texto_pdf)
+        self.assertIn('Filtros aplicados:', texto_pdf)
+        self.assertIn('Data de gera', texto_pdf)
+        self.assertIn('Status: Conclu', texto_pdf)
+        self.assertIn('Bruno Souza', texto_pdf)
+        self.assertIn('Prioridade: Todas', texto_pdf)
+
+        with app.test_request_context('/gerenciamento/exportar.xlsx?priority=3'):
+            resposta = exportar_gerenciamento_excel()
+
+        resposta.direct_passthrough = False
+        livro = load_workbook(BytesIO(resposta.get_data()))
+        planilha = livro.active
+        self.assertEqual(planilha['A1'].value, 'SGDI')
+        self.assertTrue(planilha['A3'].value.startswith('Data de geração:'))
+        rodape = planilha.oddFooter.left.text
+        self.assertIn('Filtros aplicados:', rodape)
+        self.assertIn('Prioridade: Alta', rodape)
+        self.assertIn('Status: Todos', rodape)
+        self.assertIn('Responsável: Todos', rodape)
+        textos = [
+            planilha.cell(linha, 1).value
+            for linha in range(1, planilha.max_row + 1)
+        ]
+        self.assertIn(
+            'Filtros aplicados: Status: Todos | Prioridade: Alta | Responsável: Todos',
+            textos,
+        )
+        valores = {
+            planilha.cell(linha, 1).value: planilha.cell(linha, 2).value
+            for linha in range(1, planilha.max_row + 1)
+        }
+        self.assertEqual(valores['Total de demandas'], 1)
+        self.assertEqual(valores['Abertas'], 1)
+        self.assertEqual(valores['Concluídas'], 0)
+        nomes = textos
+        self.assertIn('Ana Lima', nomes)
+        self.assertNotIn('Bruno Souza', nomes)
+
+    def test_pagina_oferece_os_dois_formatos_com_filtro(self):
+        with app.test_request_context('/gerenciamento?status=concluida&priority=1'):
+            html = gerenciamento()
+
+        self.assertIn('formaction="/gerenciamento/exportar.pdf"', html)
+        self.assertIn('formaction="/gerenciamento/exportar.xlsx"', html)
+        self.assertIn('form="filtros-gerenciamento"', html)
+        self.assertIn('Exportar PDF', html)
+        self.assertIn('Exportar Excel', html)

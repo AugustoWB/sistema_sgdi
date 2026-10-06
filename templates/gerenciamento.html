@@ -57,6 +57,27 @@
 
 </form>
 
+<div class="exportacao">
+    <button
+        type="submit"
+        class="botao-exportar"
+        form="filtros-gerenciamento"
+        formaction="/gerenciamento/exportar.pdf"
+        formmethod="get"
+    >
+        Exportar PDF
+    </button>
+    <button
+        type="submit"
+        class="botao-exportar"
+        form="filtros-gerenciamento"
+        formaction="/gerenciamento/exportar.xlsx"
+        formmethod="get"
+    >
+        Exportar Excel
+    </button>
+</div>
+
 <p class="kpi-escopo" id="kpi-escopo">
     {% if filtros_ativos %}
         Exibindo {{ indicadores.total }} demanda(s) do filtro atual.
@@ -256,6 +277,6 @@
     Os gráficos e os números usam o mesmo filtro.
 </p>
 
-<script src="{{ url_for('static', filename='gerenciamento.js') }}"></script>
+<script src="{{ url_for('static', filename='gerenciamento.js') }}?v=3"></script>
 
 {% endblock %}

@@ -1,6 +1,7 @@
-from flask import Flask, jsonify, render_template, request, redirect, flash
+from flask import Flask, jsonify, render_template, request, redirect, flash, send_file
 import sqlite3
 from datetime import datetime, timedelta
+from io import BytesIO
 
 
 app = Flask(__name__)
@@ -625,6 +626,13 @@ def indicadores_para_json(indicadores):
     }
 
 
+def consulta_dos_filtros(status=None, priority=None, responsible_id=None):
+    destino = link_da_listagem(status, priority, responsible_id)
+    if destino == '/':
+        return ''
+    return destino[1:]
+
+
 def link_da_listagem(status=None, priority=None, responsible_id=None):
     partes = []
 
@@ -1140,6 +1148,7 @@ def gerenciamento():
             priority=filtros['priority'],
             responsible_id=filtros['responsible_id'],
         ),
+        consulta_filtros=consulta_dos_filtros(**filtros),
     )
 
 
@@ -1152,6 +1161,49 @@ def api_gerenciamento():
     conn.close()
 
     return jsonify(indicadores_para_json(indicadores))
+
+
+def _resposta_relatorio(conteudo, mimetype, nome):
+    buffer = BytesIO(conteudo)
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        mimetype=mimetype,
+        as_attachment=True,
+        download_name=nome,
+    )
+
+
+@app.route('/gerenciamento/exportar.pdf')
+def exportar_gerenciamento_pdf():
+    from exportacao import gerar_pdf, montar_relatorio, nome_arquivo
+
+    filtros = ler_filtros_gerenciamento()
+    conn = get_db()
+    relatorio = montar_relatorio(conn, agora=datetime.now(), **filtros)
+    conn.close()
+
+    return _resposta_relatorio(
+        gerar_pdf(relatorio),
+        'application/pdf',
+        nome_arquivo(relatorio, 'pdf'),
+    )
+
+
+@app.route('/gerenciamento/exportar.xlsx')
+def exportar_gerenciamento_excel():
+    from exportacao import gerar_excel, montar_relatorio, nome_arquivo
+
+    filtros = ler_filtros_gerenciamento()
+    conn = get_db()
+    relatorio = montar_relatorio(conn, agora=datetime.now(), **filtros)
+    conn.close()
+
+    return _resposta_relatorio(
+        gerar_excel(relatorio),
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        nome_arquivo(relatorio, 'xlsx'),
+    )
 
 
 # ============================================================

@@ -12,6 +12,13 @@
     });
 
     form.addEventListener('submit', function (evento) {
+        var botao = evento.submitter;
+        var destino = botao ? (botao.getAttribute('formaction') || '') : '';
+
+        if (destino.indexOf('/gerenciamento/exportar.') === 0) {
+            return;
+        }
+
         evento.preventDefault();
         atualizar();
     });

@@ -12,6 +12,8 @@ A interface é servida pelo Flask. Os dados ficam em um banco SQLite (`demandas.
 - Busca por título ou ID, com debounce de 400 ms
 - Filtros combinados de status, prioridade e responsável, preservados na URL
 - Relatório de demandas por solicitante
+- Área de gerenciamento com indicadores, gráficos e filtro que atualiza números e gráficos juntos
+- Exportação do gerenciamento em PDF e Excel, com data de geração, nome da empresa e filtros no rodapé
 
 A descrição de cada rota, dos parâmetros e do formato da API está em [docs/README.md](docs/README.md).
 

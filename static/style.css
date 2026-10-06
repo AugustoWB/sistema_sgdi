@@ -283,6 +283,23 @@ textarea {
     color: #555;
 }
 
+.exportacao {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 0 0 16px;
+}
+
+.exportacao button {
+    background: #333;
+    color: #fff;
+    padding: 10px 16px;
+}
+
+.exportacao button:hover {
+    background: #111;
+}
+
 .graficos {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
