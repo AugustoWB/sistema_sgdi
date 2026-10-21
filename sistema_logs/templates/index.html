@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logs do SGDI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='logs.css') }}">
+</head>
+<body>
+    <header class="topo">
+        <div>
+            <p class="marca">SGDI</p>
+            <h1>Logs do sistema</h1>
+        </div>
+        <a href="http://127.0.0.1:5000/">Voltar ao SGDI</a>
+    </header>
+
+    <main>
+        <p class="intro">
+            Eventos importantes das demandas: criação, atualização, exclusão,
+            comentário e exportação de relatório.
+        </p>
+
+        <form class="filtro" method="GET" action="/">
+            <label for="tipo">Tipo de evento</label>
+            <select name="tipo" id="tipo">
+                <option value="">Todos</option>
+                {% for codigo, rotulo in tipos.items() %}
+                    <option value="{{ codigo }}" {% if tipo == codigo %}selected{% endif %}>
+                        {{ rotulo }}
+                    </option>
+                {% endfor %}
+            </select>
+            <button type="submit">Filtrar</button>
+            <a href="/">Limpar</a>
+        </form>
+
+        <p class="contagem">
+            {% if logs %}
+                {{ logs|length }} evento(s) recente(s)
+            {% else %}
+                Nenhum evento neste filtro
+            {% endif %}
+        </p>
+
+        <ol class="linha-do-tempo">
+            {% for log in logs %}
+            <li class="evento evento-{{ log['tipo'] }}">
+                <div class="evento-meta">
+                    <span class="selo">{{ tipos[log['tipo']] }}</span>
+                    <time datetime="{{ log['data'] }}">{{ log['data'] }}</time>
+                    {% if log['demanda_id'] %}
+                        <span class="demanda">Demanda {{ log['demanda_id'] }}</span>
+                    {% endif %}
+                </div>
+                <p class="mensagem">{{ log['mensagem'] }}</p>
+                {% if log['detalhe'] %}
+                    <p class="detalhe">{{ log['detalhe'] }}</p>
+                {% endif %}
+            </li>
+            {% else %}
+            <li class="vazio">
+                Nenhum evento importante registrado ainda.
+                Crie, edite, comente ou exporte um relatório no SGDI.
+            </li>
+            {% endfor %}
+        </ol>
+    </main>
+</body>
+</html>

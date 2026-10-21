@@ -1,3 +1,4 @@
 *.pyc
 __pycache__/
 venv/
+sistema_logs/logs.db

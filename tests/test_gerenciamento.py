@@ -253,6 +253,10 @@ class TestExportacaoDoRelatorio(unittest.TestCase):
             '2026-10-01 12:00:00', '2026-10-03 12:00:00',
         )
         self.conn.commit()
+        self.logs = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
+        self.logs.close()
+        self.logs_original = os.environ.get('SGDI_LOGS_DB')
+        os.environ['SGDI_LOGS_DB'] = self.logs.name
 
     def tearDown(self):
         self.conn.close()
@@ -261,6 +265,11 @@ class TestExportacaoDoRelatorio(unittest.TestCase):
         else:
             app.config['DATABASE'] = self.database_original
         os.remove(self.arquivo.name)
+        if self.logs_original is None:
+            os.environ.pop('SGDI_LOGS_DB', None)
+        else:
+            os.environ['SGDI_LOGS_DB'] = self.logs_original
+        os.remove(self.logs.name)
 
     def test_filtros_explicitos_inclusive_quando_vazios(self):
         from app import STATUS_ROTULOS

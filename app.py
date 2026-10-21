@@ -19,10 +19,57 @@ STATUS_ROTULOS = {
     'concluida': 'Concluída',
     'cancelada': 'Cancelada',
 }
+ROTULOS_PRIORIDADE = {
+    0: 'Nenhuma',
+    1: 'Baixa',
+    2: 'Média',
+    3: 'Alta',
+}
 PRIORIDADES_PERMITIDAS = (0, 1, 2, 3)
 PRIORIDADE_CRITICA = 3
 PRAZO_RESOLUCAO_DIAS = 30
 STATUS_EM_ABERTO = ('aberta', 'em_andamento')
+
+
+def registrar_evento(tipo, mensagem, demanda_id=None, detalhe=None):
+    from sistema_logs.registro import registrar
+    registrar(tipo, mensagem, demanda_id=demanda_id, detalhe=detalhe)
+
+
+def rotulo_prioridade(valor):
+    try:
+        return ROTULOS_PRIORIDADE.get(int(valor), str(valor))
+    except (TypeError, ValueError):
+        return str(valor)
+
+
+def detalhe_da_edicao(anterior, titulo, status, priority, responsible_id):
+    mudancas = []
+
+    if anterior['titulo'] != titulo:
+        mudancas.append(f"título: {anterior['titulo']} → {titulo}")
+
+    if anterior['status'] != status:
+        mudancas.append(
+            f"status: {STATUS_ROTULOS.get(anterior['status'], anterior['status'])}"
+            f" → {STATUS_ROTULOS.get(status, status)}"
+        )
+
+    if str(anterior['priority']) != str(priority):
+        mudancas.append(
+            f"prioridade: {rotulo_prioridade(anterior['priority'])}"
+            f" → {rotulo_prioridade(priority)}"
+        )
+
+    antes = anterior['responsible_id']
+    depois = int(responsible_id) if responsible_id else None
+    if antes != depois:
+        mudancas.append(f"responsável: {antes or 'nenhum'} → {depois or 'nenhum'}")
+
+    if not mudancas:
+        return 'Nenhum campo principal alterado'
+
+    return '; '.join(mudancas)
 
 
 def get_db():
@@ -836,6 +883,16 @@ def nova_demanda():
         conn.commit()
         conn.close()
 
+        registrar_evento(
+            'demanda_criada',
+            f'Demanda {novo_id} criada: {titulo}',
+            demanda_id=novo_id,
+            detalhe=(
+                f"Status {STATUS_ROTULOS.get(status, status)}, "
+                f"prioridade {rotulo_prioridade(priority)}"
+            ),
+        )
+
         flash('Demanda salva com sucesso!')
 
         return redirect('/')
@@ -880,7 +937,7 @@ def editar(id):
 
         atual = conn.execute(
             '''
-            SELECT status, data_conclusao
+            SELECT titulo, status, priority, responsible_id, data_conclusao
             FROM demandas
             WHERE id = ?
             ''',
@@ -916,6 +973,16 @@ def editar(id):
 
         conn.commit()
         conn.close()
+
+        if atual is not None:
+            registrar_evento(
+                'demanda_atualizada',
+                f'Demanda {id} atualizada: {titulo}',
+                demanda_id=id,
+                detalhe=detalhe_da_edicao(
+                    atual, titulo, status, priority, responsible_id
+                ),
+            )
 
         flash('Demanda atualizada com sucesso!')
 
@@ -961,6 +1028,11 @@ def deletar(id):
 
     conn = get_db()
 
+    demanda = conn.execute(
+        'SELECT titulo FROM demandas WHERE id = ?',
+        (id,)
+    ).fetchone()
+
     # Primeiro remove os comentários relacionados
     conn.execute(
         '''
@@ -981,6 +1053,13 @@ def deletar(id):
 
     conn.commit()
     conn.close()
+
+    if demanda is not None:
+        registrar_evento(
+            'demanda_excluida',
+            f'Demanda {id} excluída: {demanda["titulo"]}',
+            demanda_id=id,
+        )
 
     flash('Demanda deletada com sucesso!')
 
@@ -1100,6 +1179,13 @@ def adicionar_comentario(demanda_id):
     conn.commit()
     conn.close()
 
+    registrar_evento(
+        'comentario',
+        f'Comentário de {autor} na demanda {demanda_id}',
+        demanda_id=demanda_id,
+        detalhe=comentario,
+    )
+
     return redirect(
         f'/detalhes/{demanda_id}'
     )
@@ -1183,6 +1269,12 @@ def exportar_gerenciamento_pdf():
     relatorio = montar_relatorio(conn, agora=datetime.now(), **filtros)
     conn.close()
 
+    registrar_evento(
+        'exportacao',
+        'Relatório PDF exportado',
+        detalhe=relatorio['filtros'],
+    )
+
     return _resposta_relatorio(
         gerar_pdf(relatorio),
         'application/pdf',
@@ -1198,6 +1290,12 @@ def exportar_gerenciamento_excel():
     conn = get_db()
     relatorio = montar_relatorio(conn, agora=datetime.now(), **filtros)
     conn.close()
+
+    registrar_evento(
+        'exportacao',
+        'Relatório Excel exportado',
+        detalhe=relatorio['filtros'],
+    )
 
     return _resposta_relatorio(
         gerar_excel(relatorio),
