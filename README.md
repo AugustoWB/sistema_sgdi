@@ -14,6 +14,7 @@ A interface é servida pelo Flask. Os dados ficam em um banco SQLite (`demandas.
 - Relatório de demandas por solicitante
 - Área de gerenciamento com indicadores, gráficos e filtro que atualiza números e gráficos juntos
 - Exportação do gerenciamento em PDF e Excel, com data de geração, nome da empresa e filtros no rodapé
+- Registro e exibição dos eventos importantes em um visualizador separado (`sistema_logs`)
 
 A descrição de cada rota, dos parâmetros e do formato da API está em [docs/README.md](docs/README.md).
 
@@ -38,6 +39,20 @@ py -3 app.py
 ```
 
 Abra http://127.0.0.1:5000.
+
+O visualizador de logs sobe em outro terminal, na mesma pasta do projeto. Ele usa a porta 5001 e lê o banco `sistema_logs/logs.db`, que o SGDI preenche ao criar, editar, excluir, comentar ou exportar um relatório. Os dois ficam no ar ao mesmo tempo.
+
+```bash
+py -3 sistema_logs\visualizar.py
+```
+
+No Linux ou no macOS:
+
+```bash
+python sistema_logs/visualizar.py
+```
+
+Abra http://127.0.0.1:5001. No menu do SGDI, o link **Logs** aponta para esse endereço. Para encerrar um dos dois, use Ctrl+C no terminal correspondente. O SGDI precisa estar em execução para gravar eventos novos.
 
 `init_db.py` cria o banco e dados de exemplo. Se `demandas.db` já existir, basta `python app.py`: na primeira conexão o sistema completa colunas e índices que ainda faltarem.
 

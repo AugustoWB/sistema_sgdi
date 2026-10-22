@@ -24,6 +24,48 @@ py -3 app.py
 
 A aplicação sobe em http://127.0.0.1:5000 e também em `0.0.0.0:5000`, com o depurador do Flask ligado.
 
+## Rodar o SGDI e os logs juntos
+
+Cada sistema ocupa um terminal. Os dois usam portas diferentes e podem ficar no ar ao mesmo tempo.
+
+No primeiro terminal, na raiz do projeto:
+
+```bash
+python app.py
+```
+
+No Windows: `py -3 app.py`. O SGDI fica em http://127.0.0.1:5000.
+
+No segundo terminal, na mesma pasta:
+
+```bash
+python sistema_logs/visualizar.py
+```
+
+No Windows: `py -3 sistema_logs\visualizar.py`. O visualizador fica em http://127.0.0.1:5001.
+
+O menu do SGDI tem o link **Logs**, que abre o segundo endereço. Ctrl+C encerra só o processo daquele terminal. Sem o SGDI em execução, a tela de logs continua abrindo, mas não recebe eventos novos.
+
+## Sistema de logs
+
+O visualizador fica na pasta `sistema_logs` e não usa `demandas.db`. O SGDI grava cada evento importante em `sistema_logs/logs.db`. A tabela `logs` é criada na primeira gravação.
+
+Só entram estes eventos:
+
+| Tipo | Quando é gravado |
+| --- | --- |
+| `demanda_criada` | Uma demanda é salva |
+| `demanda_atualizada` | Uma demanda existente é editada. O detalhe lista título, status, prioridade e responsável que mudaram |
+| `demanda_excluida` | Uma demanda é apagada, com o título que ela tinha |
+| `comentario` | Um comentário é incluído, com autor e texto |
+| `exportacao` | Um PDF ou Excel do gerenciamento é baixado, com os filtros aplicados |
+
+Cada registro guarda data e hora (`aaaa-mm-dd hh:mm:ss`), tipo, id da demanda quando houver, mensagem e detalhe. A exportação não tem id de demanda. Consultar a listagem, abrir o gerenciamento ou aplicar um filtro não gera log.
+
+A tela em http://127.0.0.1:5001 mostra os eventos mais recentes primeiro, no máximo 150. O filtro **Tipo de evento** restringe a lista. **Limpar** volta a mostrar todos. Sem registros, a página avisa que ainda não há evento importante.
+
+Uma falha ao gravar o log não impede a ação no SGDI. O caminho do banco pode ser trocado com a variável de ambiente `SGDI_LOGS_DB`; o padrão é `sistema_logs/logs.db`. Esse arquivo não entra no Git.
+
 `init_db.py` cria `demandas.db` com as tabelas `demandas`, `usuarios` e `comentarios`, índices de filtro e registros de exemplo. Rodar de novo em um banco que já existe reinsere esses exemplos.
 
 Se o banco já foi criado por uma versão anterior, `python app.py` é suficiente. Na abertura da conexão, o sistema adiciona `status`, `responsible_id` e `data_conclusao` quando faltam, preenche status vazio com `aberta`, copia o solicitante para o responsável quando este está vazio e cria os índices `idx_demandas_status`, `idx_demandas_priority` e `idx_demandas_responsible_id`.
@@ -302,5 +344,8 @@ Exemplo: `/gerenciamento/exportar.pdf?status=concluida&responsibleId=2`
 | `static/style.css` | Estilo |
 | `static/busca.js` | Debounce da busca e atualização da tabela |
 | `static/gerenciamento.js` | Atualização dos indicadores e gráficos ao filtrar |
-| `tests/` | Testes de paginação, busca, filtros, indicadores e exportação |
-| `demandas.db` | Banco local, criado na execução |
+| `sistema_logs/registro.py` | Gravação e leitura dos eventos importantes |
+| `sistema_logs/visualizar.py` | Visualizador de logs, na porta 5001 |
+| `sistema_logs/logs.db` | Banco dos logs, criado na primeira gravação |
+| `tests/` | Testes de paginação, busca, filtros, indicadores, exportação e logs |
+| `demandas.db` | Banco local das demandas, criado na execução |
