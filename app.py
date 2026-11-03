@@ -244,6 +244,23 @@ def ler_responsible_id():
     return responsible_id
 
 
+
+def ler_situacao_prazo():
+    situacao = request.args.get('situacao_prazo', 'todas').strip()
+
+    situacoes_permitidas = (
+        'todas',
+        'criticas',
+        'atrasadas',
+        'criticas_atrasadas',
+    )
+
+    if situacao not in situacoes_permitidas:
+        return 'todas'
+
+    return situacao
+
+
 def ler_filtros_da_requisicao():
     usuario_id = request.args.get('usuario_id', '').strip() or None
     termo = normalizar_termo_busca(request.args.get('q', ''))
@@ -254,7 +271,10 @@ def ler_filtros_da_requisicao():
         'status': ler_status(),
         'priority': ler_priority(),
         'responsible_id': ler_responsible_id(),
+        'situacao_prazo': ler_situacao_prazo(),
     }
+
+
 
 
 def consultar_demandas_paginadas(
@@ -266,14 +286,53 @@ def consultar_demandas_paginadas(
     status=None,
     priority=None,
     responsible_id=None,
+    situacao_prazo=None,
+    sem_paginacao=False,
 ):
     """
-    Busca demandas já paginadas no SQLite (COUNT + LIMIT/OFFSET).
+    Busca demandas no SQLite, com ou sem paginação.
     Ordenação padrão: data de criação decrescente.
     """
 
     filtros = []
     parametros = []
+
+    momento = datetime.now()
+    limite_atraso = (
+        momento - timedelta(days=PRAZO_RESOLUCAO_DIAS)
+    ).strftime('%Y-%m-%d %H:%M:%S')
+
+    if situacao_prazo == 'criticas':
+        filtros.append(
+            'demandas.priority = ? '
+            'AND demandas.status IN (?, ?)'
+        )
+        parametros.extend([
+            PRIORIDADE_CRITICA,
+            *STATUS_EM_ABERTO,
+        ])
+
+    elif situacao_prazo == 'atrasadas':
+        filtros.append(
+            'demandas.status IN (?, ?) '
+            'AND demandas.data_criacao < ?'
+        )
+        parametros.extend([
+            *STATUS_EM_ABERTO,
+            limite_atraso,
+        ])
+
+    elif situacao_prazo == 'criticas_atrasadas':
+        filtros.append(
+            'demandas.priority = ? '
+            'AND demandas.status IN (?, ?) '
+            'AND demandas.data_criacao < ?'
+        )
+        parametros.extend([
+            PRIORIDADE_CRITICA,
+            *STATUS_EM_ABERTO,
+            limite_atraso,
+        ])
 
     if usuario_id:
         filtros.append('demandas.usuario_id = ?')
@@ -329,6 +388,13 @@ def consultar_demandas_paginadas(
         current_page = min(pagina, total_pages)
         offset = (current_page - 1) * limite
 
+    sql_paginacao = ''
+    parametros_consulta = parametros
+
+    if not sem_paginacao:
+        sql_paginacao = 'LIMIT ? OFFSET ?'
+        parametros_consulta = parametros + [limite, offset]
+
     demandas = conn.execute(
         f'''
         SELECT
@@ -349,12 +415,15 @@ def consultar_demandas_paginadas(
             ON demandas.responsible_id = responsavel.id
         {where_sql}
         ORDER BY demandas.data_criacao DESC, demandas.id DESC
-        LIMIT ? OFFSET ?
+        {sql_paginacao}
         ''',
-        parametros + [limite, offset]
+        parametros_consulta
     ).fetchall()
 
-    if total_items == 0:
+    if sem_paginacao:
+        inicio = 1 if total_items > 0 else 0
+        fim = total_items
+    elif total_items == 0:
         inicio = 0
         fim = 0
     else:
@@ -737,6 +806,7 @@ def render_listagem(filtros):
         status=filtros['status'],
         priority=filtros['priority'],
         responsible_id=filtros['responsible_id'],
+        situacao_prazo=filtros['situacao_prazo'],
     )
     conn.close()
 
@@ -744,6 +814,7 @@ def render_listagem(filtros):
         filtros['status'],
         filtros['priority'] is not None,
         filtros['responsible_id'],
+        filtros['situacao_prazo'] != 'todas',
     ))
 
     return render_template(
@@ -755,6 +826,7 @@ def render_listagem(filtros):
         status=filtros['status'],
         priority=filtros['priority'],
         responsible_id=filtros['responsible_id'],
+        situacao_prazo=filtros['situacao_prazo'],
         status_rotulos=STATUS_ROTULOS,
         filtros_ativos=filtros_ativos,
         limit=limite,
@@ -1279,6 +1351,98 @@ def exportar_gerenciamento_pdf():
         gerar_pdf(relatorio),
         'application/pdf',
         nome_arquivo(relatorio, 'pdf'),
+    )
+
+
+@app.route('/exportar/demandas.pdf')
+def exportar_demandas_pdf():
+    from exportacao import gerar_pdf_demandas
+
+    filtros = ler_filtros_da_requisicao()
+    conn = get_db()
+
+    resultado = consultar_demandas_paginadas(
+        conn,
+        pagina=1,
+        limite=20,
+        usuario_id=filtros['usuario_id'],
+        termo=filtros['termo'],
+        status=filtros['status'],
+        priority=filtros['priority'],
+        responsible_id=filtros['responsible_id'],
+        situacao_prazo=filtros['situacao_prazo'],
+        sem_paginacao=True,
+    )
+
+    nome_solicitante = None
+    if filtros['usuario_id']:
+        usuario = conn.execute(
+            'SELECT nome FROM usuarios WHERE id = ?',
+            (filtros['usuario_id'],),
+        ).fetchone()
+
+        if usuario:
+            nome_solicitante = usuario['nome']
+
+    nome_responsavel = None
+    if filtros['responsible_id']:
+        responsavel = conn.execute(
+            'SELECT nome FROM usuarios WHERE id = ?',
+            (filtros['responsible_id'],),
+        ).fetchone()
+
+        if responsavel:
+            nome_responsavel = responsavel['nome']
+
+    conn.close()
+
+    status_texto = STATUS_ROTULOS.get(
+        filtros['status'], 'Todos'
+    )
+
+    prioridade_texto = ROTULOS_PRIORIDADE.get(
+        filtros['priority'], 'Todas'
+    )
+
+    situacoes = {
+        'todas': 'Todas',
+        'criticas': 'Críticas',
+        'atrasadas': 'Atrasadas',
+        'criticas_atrasadas': 'Críticas e atrasadas',
+    }
+
+    filtros_texto = (
+        f"Solicitante: {nome_solicitante or 'Todos'} | "
+        f"Busca: {filtros['termo'] or 'Todas'} | "
+        f"Status: {status_texto} | "
+        f"Prioridade: {prioridade_texto} | "
+        f"Responsável: {nome_responsavel or 'Todos'} | "
+        f"Situação: {situacoes[filtros['situacao_prazo']]}"
+    )
+
+    agora = datetime.now()
+    data_geracao = agora.strftime('%d/%m/%Y %H:%M')
+
+    pdf = gerar_pdf_demandas(
+        resultado['demandas'],
+        filtros_texto,
+        data_geracao,
+    )
+
+    registrar_evento(
+        'exportacao',
+        'Listagem de demandas exportada em PDF',
+        detalhe=filtros_texto,
+    )
+
+    nome_arquivo = agora.strftime(
+        'relatorio-demandas-%Y%m%d-%H%M%S.pdf'
+    )
+
+    return _resposta_relatorio(
+        pdf,
+        'application/pdf',
+        nome_arquivo,
     )
 
 

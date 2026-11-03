@@ -330,3 +330,94 @@ def gerar_excel(relatorio):
 def nome_arquivo(relatorio, extensao):
     carimbo = relatorio['data_geracao'].replace('/', '-').replace(':', '').replace(' ', '-')
     return f'relatorio-gerenciamento-{carimbo}.{extensao}'
+
+
+def gerar_pdf_demandas(demandas, filtros, data_geracao):
+    """Gera um PDF detalhado com todas as demandas filtradas."""
+
+    pdf = FPDF(orientation='L', unit='mm', format='A4')
+    pdf.set_auto_page_break(auto=True, margin=18)
+    pdf.set_margins(10, 10, 10)
+
+    pdf.add_page()
+
+    pdf.set_font('Helvetica', 'B', 16)
+    pdf.cell(
+        0, 10, 'SGDI - Relatorio de Demandas',
+        new_x='LMARGIN', new_y='NEXT'
+    )
+
+    pdf.set_font('Helvetica', '', 9)
+    pdf.cell(
+        0, 7, f'Data de geracao: {data_geracao}',
+        new_x='LMARGIN', new_y='NEXT'
+    )
+    pdf.multi_cell(0, 6, f'Filtros aplicados: {filtros}')
+    pdf.ln(4)
+
+    cabecalhos = [
+        'ID', 'Titulo', 'Solicitante', 'Responsavel',
+        'Status', 'Prioridade', 'Criacao'
+    ]
+
+    larguras = [12, 70, 40, 40, 30, 25, 40]
+
+    def adicionar_cabecalho():
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.set_fill_color(204, 204, 204)
+
+        for texto, largura in zip(cabecalhos, larguras):
+            pdf.cell(largura, 8, texto, border=1, fill=True)
+
+        pdf.ln()
+
+    adicionar_cabecalho()
+
+    pdf.set_font('Helvetica', '', 8)
+
+    if not demandas:
+        pdf.cell(
+            sum(larguras), 10,
+            'Nenhuma demanda encontrada.',
+            border=1,
+            new_x='LMARGIN',
+            new_y='NEXT'
+        )
+    else:
+        status_rotulos = {
+            'aberta': 'Aberta',
+            'em_andamento': 'Em andamento',
+            'concluida': 'Concluida',
+            'cancelada': 'Cancelada',
+        }
+
+        prioridade_rotulos = {
+            0: 'Nenhuma',
+            1: 'Baixa',
+            2: 'Media',
+            3: 'Alta',
+        }
+
+        for demanda in demandas:
+            valores = [
+                demanda['id'],
+                demanda['titulo'] or '',
+                demanda['nome'] or 'Nao informado',
+                demanda['responsavel_nome'] or 'Nao atribuido',
+                status_rotulos.get(demanda['status'], demanda['status']),
+                prioridade_rotulos.get(demanda['priority'], 'Nao definida'),
+                demanda['data_criacao'] or '',
+            ]
+
+            altura = 8
+
+            for valor, largura in zip(valores, larguras):
+                texto = str(valor).replace('\n', ' ')
+                pdf.cell(
+                    largura, altura, texto[:45],
+                    border=1
+                )
+
+            pdf.ln()
+
+    return bytes(pdf.output())
