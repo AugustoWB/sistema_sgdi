@@ -52,6 +52,16 @@
                 Logs
             </a>
 
+            {% if session.get('user_nome') %}
+                <span class="usuario-logado">
+                    Olá, {{ session['user_nome'] }}
+                </span>
+
+                <a href="{{ url_for('logout') }}" class="logout-link">
+                    Sair
+                </a>
+            {% endif %}
+
             <form
                 id="form-busca"
                 action="/buscar"
