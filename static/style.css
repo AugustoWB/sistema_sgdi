@@ -44,6 +44,17 @@ body {
     gap: 8px;
 }
 
+.usuario-logado {
+    color: #f8f9fa;
+    font-weight: bold;
+    margin-left: 8px;
+}
+
+.logout-link {
+    color: #ffd3d3 !important;
+    font-weight: bold;
+}
+
 .menu form input[type="search"] {
     padding: 8px;
     border: 1px solid #ddd;
@@ -61,6 +72,51 @@ body {
     background-color: #ffc107;
     padding: 15px;
     margin: 10px 0;
+}
+
+.form-login {
+    max-width: 420px;
+    margin: 40px auto;
+    background: #fff;
+    border: 1px solid #ddd;
+    padding: 24px;
+    border-radius: 8px;
+}
+
+.form-login h2 {
+    margin-top: 0;
+}
+
+.form-login form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.form-login label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 6px;
+}
+
+.form-login input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.nao-autorizado {
+    max-width: 500px;
+    margin: 60px auto;
+    background: #fff3f3;
+    border: 1px solid #f1b2b2;
+    border-radius: 8px;
+    padding: 30px;
+    text-align: center;
+}
+
+.nao-autorizado h2 {
+    color: #a52a2a;
+    margin-top: 0;
 }
 
 .footer {

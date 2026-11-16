@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="nao-autorizado">
+    <h2>Acesso não autorizado</h2>
+    <p>Você precisa fazer login para acessar esta página.</p>
+    <p>Redirecionando para a tela de login em <span id="contador">5</span> segundos...</p>
+    <p>
+        <a href="{{ url_for('login') }}">Ir para login agora</a>
+    </p>
+</div>
+
+<script>
+    let segundos = 5;
+    const contador = document.getElementById('contador');
+
+    const timer = setInterval(() => {
+        segundos -= 1;
+        contador.textContent = segundos;
+
+        if (segundos <= 0) {
+            clearInterval(timer);
+            window.location.href = '{{ url_for("login") }}';
+        }
+    }, 1000);
+</script>
+{% endblock %}

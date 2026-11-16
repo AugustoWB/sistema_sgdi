@@ -1,11 +1,16 @@
-from flask import Flask, jsonify, render_template, request, redirect, flash, send_file
+from flask import Flask, jsonify, render_template, request, redirect, flash, send_file, url_for, session
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
 import sqlite3
 from datetime import datetime, timedelta
 from io import BytesIO
 
 
+
 app = Flask(__name__)
 app.secret_key = '123456'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
+app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 
 
 # ============================================================
@@ -29,6 +34,71 @@ PRIORIDADES_PERMITIDAS = (0, 1, 2, 3)
 PRIORIDADE_CRITICA = 3
 PRAZO_RESOLUCAO_DIAS = 30
 STATUS_EM_ABERTO = ('aberta', 'em_andamento')
+
+# utilizado para login no route login e logout
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "user_id" not in session:
+            flash("Você precisa estar logado.")
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def autenticar_usuario(usuario, senha_digitada):
+    if not usuario or not senha_digitada:
+        return False
+
+    senha_armazenada = usuario.get('senha') or ''
+    if not senha_armazenada:
+        return False
+
+    if senha_armazenada == senha_digitada:
+        return True
+
+    try:
+        return check_password_hash(senha_armazenada, senha_digitada)
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
+def registrar_novo_usuario(nome, email, senha):
+    nome = (nome or '').strip()
+    email = (email or '').strip().lower()
+    senha = senha or ''
+
+    if not nome or not email or len(senha) < 4:
+        return False
+
+    conn = get_db()
+    usuario_existente = conn.execute(
+        'SELECT 1 FROM usuarios WHERE email = ? LIMIT 1',
+        (email,),
+    ).fetchone()
+
+    if usuario_existente is not None:
+        conn.close()
+        return False
+
+    conn.execute(
+        '''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT,
+            email TEXT,
+            senha TEXT
+        )
+        '''
+    )
+
+    conn.execute(
+        'INSERT INTO usuarios (nome, email, senha) VALUES (?, ?, ?)',
+        (nome, email, generate_password_hash(senha)),
+    )
+    conn.commit()
+    conn.close()
+    return True
 
 
 def registrar_evento(tipo, mensagem, demanda_id=None, detalhe=None):
@@ -839,6 +909,26 @@ def render_listagem(filtros):
     )
 
 
+@app.before_request
+def exigir_login():
+    session.permanent = True
+
+    endpoints_publicos = {'login', 'logout', 'cadastro', 'nao_autorizado', 'static'}
+    if request.endpoint in endpoints_publicos:
+        return None
+
+    if request.endpoint is None:
+        return None
+
+    if not session.get('user_id'):
+        return redirect(url_for('nao_autorizado'))
+
+
+@app.route('/nao-autorizado')
+def nao_autorizado():
+    return render_template('nao_autorizado.html')
+
+
 # ============================================================
 # PÁGINA INICIAL - LISTA DE DEMANDAS
 # ============================================================
@@ -851,6 +941,67 @@ def index():
 
 # ============================================================
 # API - LISTAGEM PAGINADA DE DEMANDAS
+# ============================================================
+
+# sessão de login e logout
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        senha = request.form.get("senha", "")
+
+        conn = get_db()
+        conn.row_factory = sqlite3.Row
+        usuario = conn.execute(
+            "SELECT * FROM usuarios WHERE email = ?",
+            (email,)
+        ).fetchone()
+        conn.close()
+
+        if usuario and autenticar_usuario(dict(usuario), senha):
+            session["user_id"] = usuario["id"]
+            session["user_nome"] = usuario["nome"]
+            flash("Login realizado com sucesso!")
+            return redirect(url_for("index"))
+
+        flash("Email ou senha inválidos.")
+        return redirect(url_for("login"))
+
+    return render_template("login.html")
+
+
+@app.route("/cadastro", methods=["GET", "POST"])
+def cadastro():
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        senha = request.form.get("senha", "")
+        confirmar = request.form.get("confirmar_senha", "")
+
+        if not nome or not email or len(senha) < 4:
+            flash("Preencha nome, email e senha com pelo menos 4 caracteres.")
+            return render_template("cadastro.html")
+
+        if senha != confirmar:
+            flash("As senhas não conferem.")
+            return render_template("cadastro.html")
+
+        if not registrar_novo_usuario(nome, email, senha):
+            flash("Já existe um usuário com este email.")
+            return render_template("cadastro.html")
+
+        flash("Usuário cadastrado com sucesso! Faça login.")
+        return redirect(url_for("login"))
+
+    return render_template("cadastro.html")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("Você saiu do sistema.")
+    return redirect(url_for("login"))
+
 # ============================================================
 
 @app.route('/api/demandas')

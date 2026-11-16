@@ -1,4 +1,5 @@
 import sqlite3
+from werkzeug.security import generate_password_hash
 
 
 conn = sqlite3.connect('demandas.db')
@@ -35,14 +36,31 @@ cursor.execute('''
 CREATE TABLE IF NOT EXISTS usuarios (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nome TEXT,
-    email TEXT,
+    email TEXT UNIQUE,
     senha TEXT
 )
 ''')
 
+# inserindo dados de usuarios e demandas de exemplo
+admin_hash = generate_password_hash('admin123')
+user_hash = generate_password_hash('user123')
 
-cursor.execute("INSERT INTO usuarios (nome, email, senha) VALUES ('Admin', 'admin@example.com', 'admin123')")
-cursor.execute("INSERT INTO usuarios (nome, email, senha) VALUES ('User1', 'user1@example.com', 'user123')")
+cursor.execute(
+    "INSERT OR IGNORE INTO usuarios (id, nome, email, senha) VALUES (1, 'Admin', 'admin@example.com', ?)",
+    (admin_hash,),
+)
+cursor.execute(
+    "INSERT OR IGNORE INTO usuarios (id, nome, email, senha) VALUES (2, 'User1', 'user1@example.com', ?)",
+    (user_hash,),
+)
+
+usuarios_existentes = cursor.execute('SELECT id, senha FROM usuarios').fetchall()
+for usuario_id, senha in usuarios_existentes:
+    if senha and not senha.startswith('pbkdf2:'):
+        cursor.execute(
+            'UPDATE usuarios SET senha = ? WHERE id = ?',
+            (generate_password_hash(senha), usuario_id),
+        )
 
 cursor.execute("INSERT INTO demandas (id, titulo, descricao, solicitante, data_criacao, priority) VALUES (1, 'Corrigir bug no login', 'Usuários não conseguem fazer login', 'Admin', '2024-01-15 10:30:00', 0)")
 cursor.execute("INSERT INTO demandas (id, titulo, descricao, solicitante, data_criacao, priority) VALUES (2, 'Implementar relatório de vendas', 'Precisamos de um relatório mensal', 'User1', '2024-01-16 14:20:00', 1)")
