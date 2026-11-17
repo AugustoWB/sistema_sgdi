@@ -4,14 +4,102 @@ from functools import wraps
 import sqlite3
 from datetime import datetime, timedelta
 from io import BytesIO
+import os
+
+
+from dotenv import load_dotenv
+from pathlib import Path
+
+from flask_jwt_extended import (
+    JWTManager,
+    create_access_token,
+    jwt_required,
+    get_jwt_identity
+)
 
 
 
+
+# ============================================================
+# CONFIGURAÇÕES DA APLICAÇÃO E SEGURANÇA
+# ============================================================
+
+# Localiza a pasta onde está o app.py
+BASE_DIR = Path(__file__).resolve().parent
+
+# Define o caminho exato do arquivo .env
+CAMINHO_ENV = BASE_DIR / '.env'
+
+# Carrega as variáveis de ambiente
+load_dotenv(dotenv_path=CAMINHO_ENV, override=True)
+
+# Cria a aplicação Flask
 app = Flask(__name__)
-app.secret_key = '123456'
+
+# Configura as chaves de segurança
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
+
+# Verifica se as chaves foram carregadas
+if not app.config['SECRET_KEY']:
+    raise RuntimeError(
+        f'SECRET_KEY não encontrada em: {CAMINHO_ENV}'
+    )
+
+if not app.config['JWT_SECRET_KEY']:
+    raise RuntimeError(
+        f'JWT_SECRET_KEY não encontrada em: {CAMINHO_ENV}'
+    )
+
+# Configuração do JWT
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=30)
+
+jwt = JWTManager(app)
+
+# Configuração das sessões
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 
+print('Configurações de segurança carregadas com sucesso!')
+
+
+
+@app.route('/api/v1/auth/token', methods=['POST'])
+def api_obter_token():
+
+    dados = request.get_json(silent=True) or {}
+
+    email = dados.get('email', '').strip().lower()
+    senha = dados.get('senha', '')
+
+    if not email or not senha:
+        return jsonify({
+            'erro': 'E-mail e senha são obrigatórios.'
+        }), 400
+
+    conn = get_db()
+
+    usuario = conn.execute(
+        'SELECT * FROM usuarios WHERE email = ?',
+        (email,)
+    ).fetchone()
+
+    conn.close()
+
+    if not usuario or not autenticar_usuario(dict(usuario), senha):
+        return jsonify({
+            'erro': 'Credenciais inválidas.'
+        }), 401
+
+    token = create_access_token(
+        identity=str(usuario['id'])
+    )
+
+    return jsonify({
+        'access_token': token,
+        'token_type': 'Bearer',
+        'expires_in': 1800
+    }), 200
 
 # ============================================================
 # CONEXÃO COM O BANCO DE DADOS
@@ -909,11 +997,26 @@ def render_listagem(filtros):
     )
 
 
+
 @app.before_request
 def exigir_login():
+
+
+    # A API utiliza autenticação JWT, independente da sessão web.
+    if request.path.startswith('/api/v1/'):
+        return None
+
+    # Configuração da sessão web
     session.permanent = True
 
-    endpoints_publicos = {'login', 'logout', 'cadastro', 'nao_autorizado', 'static'}
+    endpoints_publicos = {
+        'login',
+        'logout',
+        'cadastro',
+        'nao_autorizado',
+        'static'
+    }
+
     if request.endpoint in endpoints_publicos:
         return None
 
@@ -922,6 +1025,91 @@ def exigir_login():
 
     if not session.get('user_id'):
         return redirect(url_for('nao_autorizado'))
+
+    endpoints_publicos = {
+        'login',
+        'logout',
+        'cadastro',
+        'nao_autorizado',
+        'static'
+    }
+
+    if request.endpoint in endpoints_publicos:
+        return None
+
+    if request.endpoint is None:
+        return None
+
+    if not session.get('user_id'):
+        return redirect(url_for('nao_autorizado'))
+
+#consultar demandas API
+@app.route('/api/v1/demandas', methods=['GET'])
+@jwt_required()
+def api_listar_demandas():
+
+    pagina, limite = obter_parametros_paginacao()
+
+    filtros = ler_filtros_da_requisicao()
+
+    conn = get_db()
+
+    try:
+        resultado = consultar_demandas_paginadas(
+            conn,
+            pagina,
+            limite,
+            usuario_id=filtros['usuario_id'],
+            termo=filtros['termo'],
+            status=filtros['status'],
+            priority=filtros['priority'],
+            responsible_id=filtros['responsible_id'],
+            situacao_prazo=filtros['situacao_prazo']
+        )
+
+        demandas = [
+            demanda_para_json(d)
+            for d in resultado['demandas']
+        ]
+
+        return jsonify({
+            'dados': demandas,
+            'paginacao': {
+                'pagina': resultado['current_page'],
+                'total_paginas': resultado['total_pages'],
+                'total_registros': resultado['total_items'],
+                'limite': limite
+            }
+        }), 200
+
+    finally:
+        conn.close()
+
+#Consultar indicadores de gerenciamento
+@app.route('/api/v1/gerenciamento', methods=['GET'])
+@jwt_required()
+def api_v1_gerenciamento():
+
+    status = ler_status()
+    priority = ler_priority()
+    responsible_id = ler_responsible_id()
+
+    conn = get_db()
+
+    try:
+        indicadores = calcular_indicadores(
+            conn,
+            status=status,
+            priority=priority,
+            responsible_id=responsible_id
+        )
+
+        return jsonify(
+            indicadores_para_json(indicadores)
+        ), 200
+
+    finally:
+        conn.close()
 
 
 @app.route('/nao-autorizado')

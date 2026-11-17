@@ -2,3 +2,4 @@
 __pycache__/
 venv/
 sistema_logs/logs.db
+.env
